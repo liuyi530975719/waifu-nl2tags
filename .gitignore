@@ -13,4 +13,6 @@ dist/
 *.safetensors
 *.bin
 *.log
+# local-only publish/update helper scripts
+_*.bat
 .DS_Store

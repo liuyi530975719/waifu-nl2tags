@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>waifu-nl2tags</title>
+<style>
+:root{--bg:#0f1015;--card:#1a1c25;--card2:#20222d;--bd:#2b2e3c;--tx:#e8e9f0;--mut:#9aa0b4;--pink:#ff6b9d;--pink2:#ff8fab}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:radial-gradient(1200px 600px at 72% -12%,#221420,var(--bg)) fixed;color:var(--tx);min-height:100vh}
+.wrap{max-width:1120px;margin:0 auto;padding:26px 20px 60px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.01em}
+.sub{color:var(--mut);font-size:13px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:780px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column}
+.card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
+textarea,.out{width:100%;min-height:250px;background:var(--card2);border:1px solid var(--bd);border-radius:10px;color:var(--tx);padding:13px 14px;font-size:15px;line-height:1.6;resize:vertical;outline:none}
+textarea:focus{border-color:var(--pink)}
+.out{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:14px;color:#ffd6e4;overflow:auto}
+.out.empty{color:var(--mut);font-family:inherit}
+.row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.btn{border:0;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,var(--pink),var(--pink2));color:#1a0d13}
+.btn:disabled{opacity:.6;cursor:default}
+.btn.ghost{background:transparent;border:1px solid var(--bd);color:var(--mut);font-weight:600}
+.chip{border:1px solid var(--bd);background:var(--card2);color:var(--mut);border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer}
+.chip:hover{border-color:var(--pink);color:var(--tx)}
+.meta{color:var(--mut);font-size:12px;margin-top:10px;min-height:16px}
+.err{color:#ff9a9a}
+.count{margin-left:auto;color:var(--mut);font-size:12px}
+.spin{width:15px;height:15px;border:2px solid rgba(0,0,0,.25);border-top-color:#1a0d13;border-radius:50%;display:inline-block;vertical-align:-2px;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>waifu-nl2tags 🌸</h1>
+    <span class="sub">自然语言（中 / EN） → Illustrious&nbsp;/&nbsp;NoobAI tag 提示词</span>
+  </header>
+  <div class="grid">
+    <section class="card">
+      <h2>输入 · 自然语言</h2>
+      <textarea id="inp" placeholder="例：画一个金发双马尾女孩，蓝眼睛，穿校服，在樱花树下微笑"></textarea>
+      <div class="row">
+        <button class="btn" id="go">翻译 ✨</button>
+        <button class="btn ghost" id="clr">清空</button>
+        <span class="count"><span id="cc">0</span> 字</span>
+      </div>
+      <div class="row" id="examples"></div>
+    </section>
+    <section class="card">
+      <h2>输出 · Illustrious Prompt</h2>
+      <div class="out empty" id="out">翻译结果会出现在这里…</div>
+      <div class="row">
+        <button class="btn" id="cp">复制</button>
+        <button class="btn ghost" id="cpn" title="复制并附上通用负面词">复制 + 负面词</button>
+      </div>
+      <div class="meta" id="meta"></div>
+    </section>
+  </div>
+</div>
+<script>
+const BASE = location.protocol==='file:' ? 'http://localhost:8000' : '';
+const NEG = "lowres, worst quality, low quality, bad anatomy, bad hands, extra digits, jpeg artifacts, signature, watermark, username, blurry";
+const EX = [
+  "画一个金发双马尾女孩，蓝眼睛，校服，樱花树下微笑",
+  "银发猫娘女仆，红眼睛，室内，回眸",
+  "a silver-haired elf archer in a forest at sunset, cinematic lighting",
+  "两个女孩在海滩，比基尼，夏天"
+];
+const $=s=>document.querySelector(s);
+const inp=$('#inp'),out=$('#out'),meta=$('#meta'),go=$('#go'),cc=$('#cc');
+let last="";
+const setCount=()=>cc.textContent=[...inp.value].length;
+inp.addEventListener('input',setCount);
+const exBox=$('#examples');
+EX.forEach(t=>{const c=document.createElement('span');c.className='chip';c.textContent=t.length>24?t.slice(0,24)+'…':t;c.title=t;c.onclick=()=>{inp.value=t;setCount();inp.focus()};exBox.appendChild(c);});
+async function translate(){
+  const text=inp.value.trim();
+  if(!text){inp.focus();return;}
+  go.disabled=true;const old=go.innerHTML;go.innerHTML='<span class="spin"></span> 翻译中';
+  meta.className='meta';meta.textContent='';
+  try{
+    const r=await fetch(BASE+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    last=(d.prompt||'').trim();
+    out.className='out';out.textContent=last||'(空)';
+    meta.textContent=last?(last.split(',').filter(x=>x.trim()).length+' 个 tag'):'';
+  }catch(e){
+    meta.className='meta err';
+    meta.textContent='请求失败：'+e.message+' — 请先运行  nl2tags serve  （默认 http://localhost:8000）。';
+  }finally{go.disabled=false;go.innerHTML=old;}
+}
+go.onclick=translate;
+inp.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')translate();});
+$('#clr').onclick=()=>{inp.value='';setCount();out.className='out empty';out.textContent='翻译结果会出现在这里…';meta.textContent='';inp.focus();};
+async function copy(t){try{await navigator.clipboard.writeText(t);}catch(_){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();}}
+function flash(m){meta.className='meta';meta.textContent=m;setTimeout(()=>{if(meta.textContent===m)meta.textContent='';},1500);}
+$('#cp').onclick=()=>{if(last){copy(last);flash('已复制 ✓');}};
+$('#cpn').onclick=()=>{if(last){copy(last+"\n\nNegative prompt: "+NEG);flash('已复制（含负面词）✓');}};
+</script>
+</body>
+</html>

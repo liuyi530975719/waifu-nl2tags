@@ -39,4 +39,4 @@ nl2tags = "nl2tags.cli:main"
 packages = ["nl2tags"]
 
 [tool.setuptools.package-data]
-nl2tags = ["data/*.json"]
+nl2tags = ["data/*.json", "*.html"]

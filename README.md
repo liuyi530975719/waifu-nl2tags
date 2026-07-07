@@ -71,6 +71,15 @@ export OAI_BASE_URL=http://localhost:8000/v1 OAI_API_KEY=x OAI_MODEL=Qwen/Qwen3-
 nl2tags baseline "两个女孩在海滩，比基尼，夏天"     # 立即出结果
 ```
 
+## 网页界面（左输入 · 右输出）
+
+`nl2tags serve` 自带一个网页:左边输自然语言,右边出 prompt,支持一键复制(含负面词模板)、示例、`Ctrl+Enter` 翻译。
+
+```bash
+nl2tags serve --adapter out/adapter     # 或 --proxy 接本地 vLLM/Ollama
+# 浏览器打开 http://localhost:8000
+```
+
 ## 接到游戏后端
 
 ```bash
