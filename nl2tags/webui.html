@@ -16,11 +16,15 @@ h1{font-size:22px;margin:0;font-weight:800;letter-spacing:.01em}
 @media(max-width:780px){.grid{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column}
 .card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
-textarea,.out{width:100%;min-height:250px;background:var(--card2);border:1px solid var(--bd);border-radius:10px;color:var(--tx);padding:13px 14px;font-size:15px;line-height:1.6;resize:vertical;outline:none}
+textarea,.out{width:100%;min-height:220px;background:var(--card2);border:1px solid var(--bd);border-radius:10px;color:var(--tx);padding:13px 14px;font-size:15px;line-height:1.6;resize:vertical;outline:none}
 textarea:focus{border-color:var(--pink)}
 .out{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:14px;color:#ffd6e4;overflow:auto}
 .out.empty{color:var(--mut);font-family:inherit}
 .row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.opts{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:10px 12px;background:var(--card2);border:1px solid var(--bd);border-radius:10px}
+.opts label{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:6px}
+.opts select{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:7px;padding:5px 8px;font-size:12px;outline:none}
+.opts input[type=checkbox]{accent-color:var(--pink);width:15px;height:15px}
 .btn{border:0;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,var(--pink),var(--pink2));color:#1a0d13}
 .btn:disabled{opacity:.6;cursor:default}
 .btn.ghost{background:transparent;border:1px solid var(--bd);color:var(--mut);font-weight:600}
@@ -37,12 +41,29 @@ textarea:focus{border-color:var(--pink)}
 <div class="wrap">
   <header>
     <h1>waifu-nl2tags 🌸</h1>
-    <span class="sub">自然语言（中 / EN） → Illustrious&nbsp;/&nbsp;NoobAI tag 提示词</span>
+    <span class="sub" id="sub">自然语言（中 / EN） → Illustrious&nbsp;/&nbsp;NoobAI tag 提示词</span>
   </header>
   <div class="grid">
     <section class="card">
       <h2>输入 · 自然语言</h2>
       <textarea id="inp" placeholder="例：画一个金发双马尾女孩，蓝眼睛，穿校服，在樱花树下微笑"></textarea>
+      <div class="opts">
+        <label>分级
+          <select id="rating">
+            <option value="">自动</option>
+            <option value="general">安全</option>
+            <option value="sensitive">性感</option>
+            <option value="explicit">NSFW</option>
+          </select>
+        </label>
+        <label>模板
+          <select id="tpl">
+            <option value="illustrious">Illustrious</option>
+            <option value="noobai">NoobAI</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="qual" checked> 质量词</label>
+      </div>
       <div class="row">
         <button class="btn" id="go">翻译 ✨</button>
         <button class="btn ghost" id="clr">清空</button>
@@ -77,13 +98,15 @@ const setCount=()=>cc.textContent=[...inp.value].length;
 inp.addEventListener('input',setCount);
 const exBox=$('#examples');
 EX.forEach(t=>{const c=document.createElement('span');c.className='chip';c.textContent=t.length>24?t.slice(0,24)+'…':t;c.title=t;c.onclick=()=>{inp.value=t;setCount();inp.focus()};exBox.appendChild(c);});
+fetch(BASE+'/info').then(r=>r.json()).then(d=>{if(d&&d.model)$('#sub').textContent='当前模型: '+d.model+'（'+d.mode+'）';}).catch(()=>{});
 async function translate(){
   const text=inp.value.trim();
   if(!text){inp.focus();return;}
   go.disabled=true;const old=go.innerHTML;go.innerHTML='<span class="spin"></span> 翻译中';
   meta.className='meta';meta.textContent='';
   try{
-    const r=await fetch(BASE+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const body={text,rating:$('#rating').value,template:$('#tpl').value,quality:$('#qual').checked};
+    const r=await fetch(BASE+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     last=(d.prompt||'').trim();

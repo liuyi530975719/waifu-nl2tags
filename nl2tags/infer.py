@@ -30,15 +30,15 @@ def gen_tags(nl: str, max_new_tokens: int = 128) -> str:
                               temperature=0.5, top_p=0.9, pad_token_id=_TOK.eos_token_id)
     return _TOK.decode(out[0, ids.shape[1]:], skip_special_tokens=True).strip()
 
-def postprocess(raw: str, fmt=None) -> str:
+def postprocess(raw: str, fmt=None, rating=None, add_quality=True) -> str:
     fmt = fmt or default_formatter()
     raw_tags = [t.strip() for t in raw.replace("\n", ",").split(",") if t.strip()]
-    rating = detect_rating(raw_tags)
+    r = rating or detect_rating(raw_tags)
     core = [t for t in raw_tags if fmt.normalize(t) not in RATING_WORDS]
-    return fmt.format(core, rating=rating)
+    return fmt.format(core, rating=r, add_quality=add_quality)
 
-def translate(nl: str, fmt=None) -> str:
-    return postprocess(gen_tags(nl), fmt)
+def translate(nl: str, fmt=None, rating=None, add_quality=True) -> str:
+    return postprocess(gen_tags(nl), fmt, rating=rating, add_quality=add_quality)
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="nl2tags infer")

@@ -29,15 +29,15 @@ def call_llm(nl: str) -> str:
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read())["choices"][0]["message"]["content"].strip()
 
-def postprocess(raw: str, fmt=None) -> str:
+def postprocess(raw: str, fmt=None, rating=None, add_quality=True) -> str:
     fmt = fmt or default_formatter()
     raw_tags = [t.strip() for t in raw.replace("\n", ",").split(",") if t.strip()]
-    rating = detect_rating(raw_tags)
+    r = rating or detect_rating(raw_tags)
     core = [t for t in raw_tags if fmt.normalize(t) not in RATING_WORDS]
-    return fmt.format(core, rating=rating)
+    return fmt.format(core, rating=r, add_quality=add_quality)
 
-def translate(nl: str) -> str:
-    return postprocess(call_llm(nl))
+def translate(nl: str, fmt=None, rating=None, add_quality=True) -> str:
+    return postprocess(call_llm(nl), fmt, rating=rating, add_quality=add_quality)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
