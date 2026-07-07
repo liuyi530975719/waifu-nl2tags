@@ -4,7 +4,7 @@
   nl2tags infer --adapter out/adapter --interactive
 """
 from __future__ import annotations
-import argparse, sys
+import argparse, os, sys
 from .prompt_spec import SYSTEM_PROMPT
 from .illustrious import default_formatter, detect_rating, RATING_WORDS
 
@@ -12,6 +12,17 @@ _MODEL = _TOK = None
 
 def load_model(base: str, adapter: str | None = None):
     global _MODEL, _TOK
+    if adapter and not os.path.isdir(adapter):
+        raise SystemExit(
+            "[nl2tags] adapter not found locally: '%s'\n"
+            "  (looked relative to current dir: %s)\n"
+            "  * No trained model yet? Run zero-shot instead (no training):\n"
+            "      set OAI_BASE_URL / OAI_API_KEY / OAI_MODEL  (e.g. Ollama), then:\n"
+            "        nl2tags serve --proxy\n"
+            "  * To train one:  nl2tags gen  ->  nl2tags dataset  ->  nl2tags train --preset max\n"
+            "    (creates .\\out\\adapter). Then run serve from that folder, or pass a full path:\n"
+            "        nl2tags serve --adapter <FULL_PATH>\\out\\adapter"
+            % (adapter, os.getcwd()))
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     _TOK = AutoTokenizer.from_pretrained(base)
