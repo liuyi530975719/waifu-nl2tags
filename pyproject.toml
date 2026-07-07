@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waifu-nl2tags"
+version = "0.1.0"
+description = "Bilingual (中/EN) natural-language -> Illustrious/NoobAI Danbooru-tag translator"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Peter" }]
+# light core deps -> the CLI, data tools, baseline and `serve --proxy` work on a bare install
+dependencies = [
+    "pillow>=10",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+# heavy ML stack for fine-tuning / running the model locally
+train = [
+    "torch>=2.3",
+    "transformers>=4.51",
+    "trl>=0.13",
+    "peft>=0.13",
+    "bitsandbytes>=0.43",
+    "datasets>=2.20",
+    "accelerate>=0.34",
+]
+vllm = ["vllm>=0.6"]
+all  = ["waifu-nl2tags[train,vllm]"]
+
+[project.scripts]
+nl2tags = "nl2tags.cli:main"
+
+[tool.setuptools]
+packages = ["nl2tags"]
+
+[tool.setuptools.package-data]
+nl2tags = ["data/*.json"]

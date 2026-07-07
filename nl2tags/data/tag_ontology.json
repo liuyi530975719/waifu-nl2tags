@@ -1,0 +1,129 @@
+{
+  "meta": {
+    "target": "illustrious",
+    "note": "Bilingual (zh/en) Danbooru tag ontology for synthesizing NL<->tag training pairs. 'tag' = canonical english danbooru tag (spaces, no underscores). 'zh' = chinese synonyms a user might type. 'en' = english NL phrases a user might type. 'w' = sampling weight. Extend freely; caption_cards.py can auto-mine new tags from your own card metadata."
+  },
+  "categories": {
+    "count": [
+      {"tag": "1girl", "zh": ["一个女孩", "一位少女", "单人女性", "一个女生"], "en": ["a girl", "a young woman", "one girl"], "w": 60},
+      {"tag": "1boy", "zh": ["一个男孩", "一位少年", "单人男性", "一个男生"], "en": ["a boy", "a young man", "one boy"], "w": 15},
+      {"tag": "2girls", "zh": ["两个女孩", "两位少女"], "en": ["two girls"], "w": 8},
+      {"tag": "1other", "zh": ["一个角色", "一名人物"], "en": ["a character"], "w": 3},
+      {"tag": "solo", "zh": ["单人", "只有一个人", "独自一人"], "en": ["solo", "alone", "by herself"], "w": 50}
+    ],
+    "species": [
+      {"tag": "cat girl", "zh": ["猫娘", "猫耳娘"], "en": ["cat girl", "catgirl"], "w": 8, "extra_tags": ["animal ears", "cat ears", "cat tail"]},
+      {"tag": "fox girl", "zh": ["狐娘", "狐狸娘"], "en": ["fox girl", "kitsune girl"], "w": 5, "extra_tags": ["animal ears", "fox ears", "fox tail"]},
+      {"tag": "elf", "zh": ["精灵", "妖精"], "en": ["an elf", "elf girl"], "w": 6, "extra_tags": ["pointy ears"]},
+      {"tag": "angel", "zh": ["天使"], "en": ["an angel"], "w": 3, "extra_tags": ["wings", "halo"]},
+      {"tag": "demon girl", "zh": ["魅魔", "恶魔娘", "小恶魔"], "en": ["demon girl", "succubus"], "w": 3, "extra_tags": ["demon horns", "demon tail"]}
+    ],
+    "hair_length": [
+      {"tag": "long hair", "zh": ["长发", "长头发"], "en": ["long hair"], "w": 40},
+      {"tag": "short hair", "zh": ["短发"], "en": ["short hair"], "w": 20},
+      {"tag": "medium hair", "zh": ["中长发", "齐肩发"], "en": ["medium-length hair", "shoulder-length hair"], "w": 12},
+      {"tag": "very long hair", "zh": ["超长发", "及腰长发"], "en": ["very long hair", "waist-length hair"], "w": 10}
+    ],
+    "hair_style": [
+      {"tag": "twintails", "zh": ["双马尾", "双马尾辫"], "en": ["twintails", "pigtails"], "w": 14},
+      {"tag": "ponytail", "zh": ["马尾", "单马尾"], "en": ["a ponytail"], "w": 12},
+      {"tag": "braid", "zh": ["麻花辫", "辫子"], "en": ["a braid", "braided hair"], "w": 8},
+      {"tag": "hair bun", "zh": ["丸子头", "发髻"], "en": ["a hair bun"], "w": 6},
+      {"tag": "wavy hair", "zh": ["波浪卷", "卷发"], "en": ["wavy hair"], "w": 8},
+      {"tag": "blunt bangs", "zh": ["齐刘海"], "en": ["blunt bangs"], "w": 8},
+      {"tag": "hime cut", "zh": ["公主切"], "en": ["a hime cut"], "w": 4}
+    ],
+    "hair_color": [
+      {"tag": "blonde hair", "zh": ["金发", "金色头发"], "en": ["blonde hair", "golden hair"], "w": 16},
+      {"tag": "black hair", "zh": ["黑发", "黑色头发"], "en": ["black hair"], "w": 16},
+      {"tag": "brown hair", "zh": ["棕发", "棕色头发", "褐色头发"], "en": ["brown hair"], "w": 14},
+      {"tag": "white hair", "zh": ["白发", "银白色头发"], "en": ["white hair"], "w": 10},
+      {"tag": "silver hair", "zh": ["银发", "银色头发"], "en": ["silver hair"], "w": 8},
+      {"tag": "pink hair", "zh": ["粉发", "粉色头发", "粉红头发"], "en": ["pink hair"], "w": 10},
+      {"tag": "blue hair", "zh": ["蓝发", "蓝色头发"], "en": ["blue hair"], "w": 9},
+      {"tag": "red hair", "zh": ["红发", "红色头发"], "en": ["red hair"], "w": 7},
+      {"tag": "purple hair", "zh": ["紫发", "紫色头发"], "en": ["purple hair"], "w": 7},
+      {"tag": "green hair", "zh": ["绿发", "绿色头发"], "en": ["green hair"], "w": 5}
+    ],
+    "eyes": [
+      {"tag": "blue eyes", "zh": ["蓝眼", "蓝色眼睛"], "en": ["blue eyes"], "w": 14},
+      {"tag": "red eyes", "zh": ["红眼", "红色眼睛"], "en": ["red eyes"], "w": 12},
+      {"tag": "green eyes", "zh": ["绿眼", "绿色眼睛"], "en": ["green eyes"], "w": 10},
+      {"tag": "purple eyes", "zh": ["紫眼", "紫色眼睛"], "en": ["purple eyes"], "w": 9},
+      {"tag": "yellow eyes", "zh": ["黄眼", "金色眼睛"], "en": ["yellow eyes", "golden eyes"], "w": 8},
+      {"tag": "heterochromia", "zh": ["异色瞳", "异瞳"], "en": ["heterochromia", "different colored eyes"], "w": 5}
+    ],
+    "expression": [
+      {"tag": "smile", "zh": ["微笑", "笑容"], "en": ["smiling", "a smile"], "w": 20},
+      {"tag": "blush", "zh": ["脸红", "害羞"], "en": ["blushing"], "w": 16},
+      {"tag": "light smile", "zh": ["浅笑", "淡淡的微笑"], "en": ["a faint smile"], "w": 8},
+      {"tag": "open mouth", "zh": ["张嘴", "张着嘴"], "en": ["open mouth"], "w": 10},
+      {"tag": "closed eyes", "zh": ["闭眼", "闭着眼睛"], "en": ["closed eyes"], "w": 6},
+      {"tag": "seductive smile", "zh": ["诱惑的笑", "妩媚一笑"], "en": ["a seductive smile"], "w": 5},
+      {"tag": "expressionless", "zh": ["面无表情", "冷漠"], "en": ["expressionless"], "w": 5},
+      {"tag": "crying", "zh": ["哭泣", "流泪"], "en": ["crying", "tears"], "w": 3}
+    ],
+    "clothing": [
+      {"tag": "school uniform", "zh": ["校服", "学生制服"], "en": ["a school uniform"], "w": 14},
+      {"tag": "serafuku", "zh": ["水手服", "水手制服"], "en": ["a sailor uniform"], "w": 8},
+      {"tag": "maid", "zh": ["女仆装", "女仆"], "en": ["a maid outfit"], "w": 8, "extra_tags": ["maid headdress", "apron"]},
+      {"tag": "kimono", "zh": ["和服"], "en": ["a kimono"], "w": 7},
+      {"tag": "china dress", "zh": ["旗袍", "中国风连衣裙"], "en": ["a china dress", "a cheongsam"], "w": 6},
+      {"tag": "dress", "zh": ["连衣裙", "裙子"], "en": ["a dress"], "w": 12},
+      {"tag": "gothic lolita", "zh": ["哥特萝莉", "洛丽塔"], "en": ["a gothic lolita dress"], "w": 5},
+      {"tag": "bikini", "zh": ["比基尼"], "en": ["a bikini"], "w": 8, "rating_hint": "sensitive"},
+      {"tag": "swimsuit", "zh": ["泳装", "泳衣"], "en": ["a swimsuit"], "w": 7, "rating_hint": "sensitive"},
+      {"tag": "hoodie", "zh": ["连帽衫", "卫衣"], "en": ["a hoodie"], "w": 6},
+      {"tag": "off-shoulder", "zh": ["露肩", "一字肩"], "en": ["off-shoulder"], "w": 6},
+      {"tag": "military uniform", "zh": ["军装", "军服"], "en": ["a military uniform"], "w": 4},
+      {"tag": "witch hat", "zh": ["女巫帽", "巫女帽"], "en": ["a witch hat"], "w": 4},
+      {"tag": "thighhighs", "zh": ["过膝袜", "大腿袜"], "en": ["thighhighs"], "w": 10}
+    ],
+    "pose": [
+      {"tag": "looking at viewer", "zh": ["看向镜头", "注视观众", "看着你"], "en": ["looking at the viewer", "facing the camera"], "w": 30},
+      {"tag": "sitting", "zh": ["坐着", "坐姿"], "en": ["sitting"], "w": 12},
+      {"tag": "standing", "zh": ["站立", "站着"], "en": ["standing"], "w": 12},
+      {"tag": "lying", "zh": ["躺着", "躺卧"], "en": ["lying down"], "w": 6},
+      {"tag": "arms up", "zh": ["举起双手", "双手上举"], "en": ["arms raised"], "w": 5},
+      {"tag": "hand on own cheek", "zh": ["手托脸颊", "手撑着脸"], "en": ["hand on cheek"], "w": 4},
+      {"tag": "looking back", "zh": ["回眸", "回头看"], "en": ["looking back over shoulder"], "w": 6},
+      {"tag": "outstretched hand", "zh": ["伸出手", "伸手"], "en": ["reaching out a hand"], "w": 4},
+      {"tag": "peace sign", "zh": ["剪刀手", "比耶", "V字手势"], "en": ["making a peace sign"], "w": 6}
+    ],
+    "composition": [
+      {"tag": "upper body", "zh": ["上半身", "半身像"], "en": ["upper body shot"], "w": 14},
+      {"tag": "full body", "zh": ["全身", "全身像"], "en": ["full body shot"], "w": 12},
+      {"tag": "portrait", "zh": ["肖像", "特写"], "en": ["a portrait", "close-up"], "w": 8},
+      {"tag": "cowboy shot", "zh": ["七分身", "膝上构图"], "en": ["cowboy shot", "from the thighs up"], "w": 6},
+      {"tag": "from above", "zh": ["俯视", "俯拍"], "en": ["from above"], "w": 5},
+      {"tag": "from below", "zh": ["仰视", "仰拍"], "en": ["from below"], "w": 5},
+      {"tag": "dutch angle", "zh": ["倾斜构图", "荷兰角"], "en": ["dutch angle"], "w": 3}
+    ],
+    "background": [
+      {"tag": "simple background", "zh": ["简单背景", "纯色背景"], "en": ["a simple background"], "w": 12},
+      {"tag": "white background", "zh": ["白色背景", "白底"], "en": ["a white background"], "w": 8},
+      {"tag": "outdoors", "zh": ["户外", "室外"], "en": ["outdoors"], "w": 10},
+      {"tag": "cherry blossoms", "zh": ["樱花", "樱花树下"], "en": ["cherry blossoms", "sakura"], "w": 8},
+      {"tag": "night", "zh": ["夜晚", "夜景"], "en": ["at night"], "w": 8},
+      {"tag": "cityscape", "zh": ["城市街景", "都市背景"], "en": ["a cityscape"], "w": 6},
+      {"tag": "classroom", "zh": ["教室"], "en": ["a classroom"], "w": 6},
+      {"tag": "beach", "zh": ["海滩", "沙滩"], "en": ["on the beach"], "w": 7},
+      {"tag": "flower field", "zh": ["花田", "花海"], "en": ["a field of flowers"], "w": 6},
+      {"tag": "starry sky", "zh": ["星空", "满天繁星"], "en": ["a starry sky"], "w": 6},
+      {"tag": "indoors", "zh": ["室内", "屋内"], "en": ["indoors"], "w": 6},
+      {"tag": "sunset", "zh": ["夕阳", "黄昏"], "en": ["at sunset"], "w": 6}
+    ],
+    "lighting_style": [
+      {"tag": "depth of field", "zh": ["景深", "背景虚化"], "en": ["shallow depth of field"], "w": 6},
+      {"tag": "backlighting", "zh": ["逆光"], "en": ["backlighting"], "w": 5},
+      {"tag": "cinematic lighting", "zh": ["电影感光效", "电影级光照"], "en": ["cinematic lighting"], "w": 5},
+      {"tag": "god rays", "zh": ["丁达尔光", "耶稣光"], "en": ["god rays", "light rays"], "w": 4},
+      {"tag": "bloom", "zh": ["柔光", "泛光"], "en": ["soft bloom lighting"], "w": 3}
+    ],
+    "rating": [
+      {"tag": "", "zh": [], "en": [], "w": 70, "rating": "general"},
+      {"tag": "", "zh": ["性感一点", "微微性感"], "en": ["a bit sexy"], "w": 20, "rating": "sensitive"},
+      {"tag": "", "zh": [], "en": [], "w": 10, "rating": "questionable"}
+    ]
+  }
+}
