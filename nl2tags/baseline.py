@@ -16,11 +16,11 @@ import json, os, sys, urllib.request
 from .prompt_spec import build_messages
 from .illustrious import default_formatter, detect_rating, RATING_WORDS
 
-def call_llm(nl: str) -> str:
+def call_llm(nl: str, model=None) -> str:
     base = os.getenv("OAI_BASE_URL"); key = os.getenv("OAI_API_KEY")
     if not (base and key):
         raise SystemExit("Set OAI_BASE_URL, OAI_API_KEY, OAI_MODEL (any OpenAI-compatible endpoint).")
-    body = json.dumps({"model": os.getenv("OAI_MODEL", "gpt-4o-mini"),
+    body = json.dumps({"model": model or os.getenv("OAI_MODEL", "gpt-4o-mini"),
                        "messages": build_messages(nl, fewshot=True),
                        "temperature": 0.4, "max_tokens": 160}).encode()
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=body,
@@ -36,13 +36,27 @@ def postprocess(raw: str, fmt=None, rating=None, add_quality=True) -> str:
     core = [t for t in raw_tags if fmt.normalize(t) not in RATING_WORDS]
     return fmt.format(core, rating=r, add_quality=add_quality)
 
-def translate(nl: str, fmt=None, rating=None, add_quality=True) -> str:
-    return postprocess(call_llm(nl), fmt, rating=rating, add_quality=add_quality)
+def translate(nl: str, fmt=None, rating=None, add_quality=True, model=None) -> str:
+    return postprocess(call_llm(nl, model), fmt, rating=rating, add_quality=add_quality)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit('usage: python src/baseline.py "your description"')
     print(translate(" ".join(sys.argv[1:])))
+
+def list_models():
+    """List models from the OpenAI-compatible endpoint (e.g. Ollama /v1/models). [] on failure."""
+    base = os.getenv("OAI_BASE_URL"); key = os.getenv("OAI_API_KEY")
+    if not (base and key):
+        return []
+    try:
+        req = urllib.request.Request(base.rstrip("/") + "/models",
+                                     headers={"Authorization": "Bearer " + key})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        return sorted(m.get("id") for m in data.get("data", []) if m.get("id"))
+    except Exception:
+        return []
 
 def main(argv=None):
     import sys

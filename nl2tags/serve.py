@@ -15,7 +15,7 @@ from .illustrious import Formatter, default_formatter
 _HTML = Path(__file__).resolve().parent / "webui.html"
 _ONT = Path(__file__).resolve().parent / "data" / "tag_ontology.json"
 
-def build_app(translate_fn, info=None):
+def build_app(translate_fn, info=None, models_fn=None):
     """translate_fn(text:str, opts:dict)->str.  opts: rating|template|quality."""
     from fastapi import FastAPI, Body
     from fastapi.responses import HTMLResponse
@@ -37,6 +37,10 @@ def build_app(translate_fn, info=None):
     def _info():
         return info or {"mode": "unknown", "model": ""}
 
+    @app.get("/models")
+    def _models():
+        return {"models": (models_fn() if models_fn else [])}
+
     @app.post("/translate")
     def translate_ep(payload: dict = Body(...)):
         p = payload or {}
@@ -44,6 +48,7 @@ def build_app(translate_fn, info=None):
             "rating": (p.get("rating") or None),
             "template": (p.get("template") or "illustrious"),
             "quality": bool(p.get("quality", True)),
+            "model": (p.get("model") or None),
         }
         return {"prompt": translate_fn(p.get("text", ""), opts)}
 
@@ -71,10 +76,11 @@ def main(argv=None):
     get_fmt = _formatter_cache()
 
     if a.proxy:
-        from .baseline import call_llm, postprocess
+        from .baseline import call_llm, postprocess, list_models
         info = {"mode": "proxy", "model": os.getenv("OAI_MODEL", "OAI endpoint")}
+        models_fn = list_models
         def translate_fn(text, opts):
-            return postprocess(call_llm(text), get_fmt(opts["template"]),
+            return postprocess(call_llm(text, opts.get("model")), get_fmt(opts["template"]),
                                rating=opts["rating"], add_quality=opts["quality"])
     else:
         from .infer import load_model, gen_tags, postprocess
@@ -84,13 +90,14 @@ def main(argv=None):
             base = PRESETS[a.preset or DEFAULT_PRESET]["base"]
         load_model(base, a.adapter)
         info = {"mode": "model", "model": (a.adapter or base)}
+        models_fn = None
         def translate_fn(text, opts):
             return postprocess(gen_tags(text), get_fmt(opts["template"]),
                                rating=opts["rating"], add_quality=opts["quality"])
 
     import uvicorn
     print(f"nl2tags web UI -> http://localhost:{a.port}")
-    uvicorn.run(build_app(translate_fn, info), host=a.host, port=a.port)
+    uvicorn.run(build_app(translate_fn, info, models_fn), host=a.host, port=a.port)
 
 if __name__ == "__main__":
     main()

@@ -48,6 +48,9 @@ textarea:focus{border-color:var(--pink)}
       <h2>输入 · 自然语言</h2>
       <textarea id="inp" placeholder="例：画一个金发双马尾女孩，蓝眼睛，穿校服，在樱花树下微笑"></textarea>
       <div class="opts">
+        <label id="mwrap" style="display:none">模型
+          <select id="model"><option value="">（默认）</option></select>
+        </label>
         <label>分级
           <select id="rating">
             <option value="">自动</option>
@@ -99,13 +102,14 @@ inp.addEventListener('input',setCount);
 const exBox=$('#examples');
 EX.forEach(t=>{const c=document.createElement('span');c.className='chip';c.textContent=t.length>24?t.slice(0,24)+'…':t;c.title=t;c.onclick=()=>{inp.value=t;setCount();inp.focus()};exBox.appendChild(c);});
 fetch(BASE+'/info').then(r=>r.json()).then(d=>{if(d&&d.model)$('#sub').textContent='当前模型: '+d.model+'（'+d.mode+'）';}).catch(()=>{});
+fetch(BASE+'/models').then(r=>r.json()).then(d=>{const ms=(d&&d.models)||[];if(!ms.length)return;const sel=$('#model');ms.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sel.appendChild(o);});$('#mwrap').style.display='';}).catch(()=>{});
 async function translate(){
   const text=inp.value.trim();
   if(!text){inp.focus();return;}
   go.disabled=true;const old=go.innerHTML;go.innerHTML='<span class="spin"></span> 翻译中';
   meta.className='meta';meta.textContent='';
   try{
-    const body={text,rating:$('#rating').value,template:$('#tpl').value,quality:$('#qual').checked};
+    const body={text,rating:$('#rating').value,template:$('#tpl').value,quality:$('#qual').checked,model:$('#model').value};
     const r=await fetch(BASE+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
