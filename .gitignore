@@ -15,6 +15,9 @@ dist/
 *.log
 .DS_Store
 
+# local-only helper scripts
+_*.bat
+
 # secrets — never commit
 keys.local.json
 .env
