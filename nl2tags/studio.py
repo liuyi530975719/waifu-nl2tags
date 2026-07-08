@@ -9,13 +9,47 @@ one at a time, and streams its log to the page. Artifacts on disk drive the
 per-step "done" checkmarks.
 """
 from __future__ import annotations
-import argparse, os, subprocess, sys, threading, time
+import argparse, json, os, subprocess, sys, threading, time
 from pathlib import Path
 from .illustrious import default_formatter  # noqa: F401 (ensures package importable)
 
 _JOB = {"proc": None, "step": None, "log": [], "running": False, "returncode": None, "started": 0.0}
 _LOCK = threading.Lock()
 _GPU = None
+_CURATE = {"adding": False, "done": 0, "total": 0, "added": 0}
+_CLOCK = threading.Lock()
+
+def _pool_count(workdir):
+    f = Path(workdir) / "data" / "pool.jsonl"
+    if not f.exists():
+        return 0
+    try:
+        return sum(1 for ln in f.open(encoding="utf-8") if ln.strip())
+    except Exception:
+        return 0
+
+def _curate_worker(items, workdir, grok_key, lang):
+    from . import collect_civitai as CC
+    pool = Path(workdir) / "data" / "pool.jsonl"
+    pool.parent.mkdir(parents=True, exist_ok=True)
+    added = 0
+    with open(pool, "a", encoding="utf-8") as f:
+        for it in items:
+            try:
+                g = CC.grok_caption(it["url"], grok_key)
+            except Exception:
+                g = None
+            ev = CC.evaluate({"url": it["url"], "prompt": it.get("prompt", ""),
+                              "nsfw": it.get("nsfw", "")}, g, lang, 0.0)   # human already judged -> no overlap gate
+            if g and len(ev["target"]) >= 4 and ev["nl"]:
+                f.write(json.dumps({"lang": ev["lang"], "nl": ev["nl"], "tags": ev["target"],
+                                    "rating": ev["rating"], "src": ev["url"]}, ensure_ascii=False) + "\n")
+                added += 1
+            with _CLOCK:
+                _CURATE["done"] += 1
+    with _CLOCK:
+        _CURATE["adding"] = False
+        _CURATE["added"] = added
 
 def _gpu():
     global _GPU
@@ -39,6 +73,7 @@ def _artifacts(workdir):
         "synth": (w / "data" / "synth.jsonl").exists(),
         "cards": (w / "data" / "cards.jsonl").exists(),
         "civitai": (w / "data" / "civitai.jsonl").exists(),
+        "pool": (w / "data" / "pool.jsonl").exists(),
         "dataset": (w / "data" / "train.jsonl").exists(),
         "adapter": (w / "out" / "adapter" / "adapter_config.json").exists(),
     }
@@ -61,15 +96,19 @@ def _cmd(step, p, workdir):
             c += ["--model-id", str(p["model_id"]).strip()]
         return c
     if step == "dataset":
-        inputs = [x for x in ["data/synth.jsonl", "data/cards.jsonl", "data/civitai.jsonl"]
+        inputs = [x for x in ["data/synth.jsonl", "data/cards.jsonl", "data/civitai.jsonl", "data/pool.jsonl"]
                   if (Path(workdir) / x).exists()]
         if not inputs:
             return None
         return py + ["nl2tags.make_dataset", "--inputs"] + inputs + ["--out-dir", "data"]
     if step == "train":
-        return py + ["nl2tags.train_qlora", "--preset", p.get("preset", "max"),
-                     "--epochs", str(p.get("epochs", 3)), "--train", "data/train.jsonl",
-                     "--val", "data/val.jsonl", "--out", "out/adapter"]
+        targs = ["--preset", p.get("preset", "max"), "--epochs", str(p.get("epochs", 3)),
+                 "--train", "data/train.jsonl", "--val", "data/val.jsonl", "--out", "out/adapter"]
+        ngpu = len(_gpu())
+        if ngpu >= 2 and p.get("multi_gpu", True):
+            return py + ["accelerate.commands.launch", "--multi_gpu", "--num_processes", str(ngpu),
+                         "--mixed_precision", "bf16", "-m", "nl2tags.train_qlora"] + targs
+        return py + ["nl2tags.train_qlora"] + targs
     if step == "infer":
         return py + ["nl2tags.infer", "--adapter", "out/adapter", (p.get("text") or "1girl, solo")]
     return None
@@ -129,6 +168,54 @@ def build_studio_app(workdir):
             job = {"step": _JOB["step"], "running": _JOB["running"], "returncode": _JOB["returncode"],
                    "log": _JOB["log"][-500:], "elapsed": int(time.time() - _JOB["started"]) if _JOB["started"] else 0}
         return {"job": job, "artifacts": _artifacts(workdir), "gpu": _gpu(), "workdir": workdir}
+
+    @app.post("/api/curate/fetch")
+    def curate_fetch(payload: dict = Body(...)):
+        from . import keys as K, collect_civitai as CC
+        k = K.resolve(workdir)
+        if not k["grok"]:
+            return {"ok": False, "error": "请先在密钥面板填入 Grok key(加入池子时要用)", "items": []}
+        p = payload or {}
+        try:
+            items = CC.fetch_batch(k["civitai"], int(p.get("n", 24)), p.get("nsfw", "X"),
+                                   str(p.get("model_id", "")).strip() or None)
+            return {"ok": True, "items": items}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "items": []}
+
+    @app.post("/api/curate/add")
+    def curate_add(payload: dict = Body(...)):
+        from . import keys as K
+        with _CLOCK:
+            if _CURATE["adding"]:
+                return {"ok": False, "error": "正在加入,请稍候"}
+        k = K.resolve(workdir)
+        if not k["grok"]:
+            return {"ok": False, "error": "请先填 Grok key"}
+        items = (payload or {}).get("items", [])
+        if not items:
+            return {"ok": False, "error": "没有选中的图"}
+        with _CLOCK:
+            _CURATE.update(adding=True, done=0, total=len(items), added=0)
+        threading.Thread(target=_curate_worker,
+                         args=(items, workdir, k["grok"], (payload or {}).get("lang", "mix")),
+                         daemon=True).start()
+        return {"ok": True, "total": len(items)}
+
+    @app.get("/api/curate/state")
+    def curate_state():
+        with _CLOCK:
+            c = dict(_CURATE)
+        c["pool"] = _pool_count(workdir)
+        c["target"] = int(os.getenv("NL2TAGS_ROUND", "200"))
+        return c
+
+    @app.post("/api/curate/reset")
+    def curate_reset():
+        f = Path(workdir) / "data" / "pool.jsonl"
+        if f.exists():
+            f.rename(f.with_name(f"pool_used_{int(time.time())}.jsonl"))
+        return {"ok": True, "pool": 0}
 
     @app.post("/api/run")
     def run(payload: dict = Body(...)):

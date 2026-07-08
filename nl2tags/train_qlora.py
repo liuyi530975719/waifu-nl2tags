@@ -8,7 +8,7 @@ Trains only on the assistant completion.
   nl2tags train --model Qwen/Qwen3-8B        # explicit base
 """
 from __future__ import annotations
-import argparse
+import argparse, os
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="nl2tags train")
@@ -54,8 +54,10 @@ def main(argv=None):
         bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                                  bnb_4bit_compute_dtype=torch.bfloat16,
                                  bnb_4bit_use_double_quant=True)
+        world = int(os.environ.get("WORLD_SIZE", "1"))
+        device_map = {"": int(os.environ.get("LOCAL_RANK", "0"))} if world > 1 else "auto"
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb, device_map="auto", torch_dtype=torch.bfloat16)
+            model_id, quantization_config=bnb, device_map=device_map, torch_dtype=torch.bfloat16)
         model = prepare_model_for_kbit_training(model)
         peft_cfg = LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
                               task_type="CAUSAL_LM",
