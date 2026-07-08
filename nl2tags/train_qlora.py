@@ -25,6 +25,17 @@ def main(argv=None):
     ap.add_argument("--maxlen", type=int, default=1024)
     a = ap.parse_args(argv)
 
+    import torch
+    if not torch.cuda.is_available():
+        raise SystemExit(
+            "[nl2tags] PyTorch can't see a CUDA GPU — you almost certainly have the CPU-only torch.\n"
+            "  Your RTX PRO 6000 is Blackwell (sm_120) and needs a CUDA 12.8 build:\n"
+            "      pip uninstall -y torch\n"
+            "      pip install torch --index-url https://download.pytorch.org/whl/cu128\n"
+            "  (if it says sm_120 unsupported, use nightly:\n"
+            "      pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu128 )\n"
+            "  verify:  python -c \"import torch;print(torch.cuda.is_available())\"  -> should be True")
+
     from .presets import PRESETS, DEFAULT_PRESET
     preset = a.preset or (DEFAULT_PRESET if not a.model else None)
     full = a.full

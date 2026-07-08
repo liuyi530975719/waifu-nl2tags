@@ -44,7 +44,9 @@ def doctor():
                    else "balanced" if total >= 22 else "fast")
             print(f"  total VRAM {total} GB  ->  recommended preset: {rec}")
         else:
-            print("  no CUDA GPU visible — training needs one; baseline/zero-shot still work")
+            print("  no CUDA GPU visible — your torch is the CPU build (training needs CUDA).")
+            print("  Blackwell (RTX PRO 6000) fix:")
+            print("    pip uninstall -y torch && pip install torch --index-url https://download.pytorch.org/whl/cu128")
     except ImportError:
         print("  torch not installed — run:  pip install 'waifu-nl2tags[train]'")
 
