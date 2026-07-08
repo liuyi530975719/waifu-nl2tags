@@ -95,22 +95,42 @@ _NSFW_RATING = {"None": "general", "Soft": "sensitive", "Mature": "questionable"
 def _words(tags):
     return set(re.findall(r"[a-z0-9]+", " ".join(tags).lower()))
 
-def build_row(item, grok, lang, min_overlap):
-    """Pair a fetched item + grok caption into a training row, or None (对照 gate)."""
+def evaluate(item, grok, lang, min_overlap):
+    """Full assessment of one (image, caption) pair — used by preview and by main."""
     target = prompt_to_tags(item["prompt"], strip_quality=True)
-    if len(target) < 4:
-        return None
-    tw, gw = _words(target), _words(grok["tags"])
+    gtags = (grok or {}).get("tags", [])
+    tw, gw = _words(target), _words(gtags)
     overlap = (len(tw & gw) / len(tw)) if tw else 0.0
-    if overlap < min_overlap:
-        return None
-    nl = grok["nl_zh"] if lang == "zh" else grok["nl_en"] if lang == "en" else \
-        (grok["nl_zh"] if random.random() < 0.6 else grok["nl_en"])
-    if not nl:
-        return None
-    rating = _NSFW_RATING.get(item["nsfw"], "general")
-    return {"lang": lang if lang != "mix" else ("zh" if nl == grok["nl_zh"] else "en"),
-            "nl": nl, "tags": target, "rating": rating, "src": item["url"], "overlap": round(overlap, 2)}
+    if grok:
+        if lang == "zh":
+            nl = grok.get("nl_zh", "")
+        elif lang == "en":
+            nl = grok.get("nl_en", "")
+        else:
+            nl = grok.get("nl_zh") if random.random() < 0.6 else grok.get("nl_en")
+        nl = (nl or grok.get("nl_en") or grok.get("nl_zh") or "").strip()
+    else:
+        nl = ""
+    rlang = "zh" if (grok and nl == (grok.get("nl_zh") or "").strip()) else "en"
+    kept = bool(grok) and len(target) >= 4 and overlap >= min_overlap and bool(nl)
+    return {"url": item["url"], "nl": nl, "grok_tags": gtags, "target": target,
+            "overlap": round(overlap, 2), "kept": kept,
+            "rating": _NSFW_RATING.get(item["nsfw"], "general"),
+            "lang": lang if lang != "mix" else rlang}
+
+def preview(n, model_id, nsfw, scope, civitai_key, grok_key, lang="mix", min_overlap=0.15):
+    """Fetch + caption n images, return per-item assessments. Writes nothing."""
+    src = model_id if (scope in ("model", "both") and model_id) else None
+    out = []
+    for item in fetch_images(civitai_key, n, nsfw, model_id=src):
+        try:
+            g = grok_caption(item["url"], grok_key)
+        except Exception:
+            g = None
+        out.append(evaluate(item, g, lang, min_overlap))
+        if len(out) >= n:
+            break
+    return out
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="nl2tags collect-civitai")
@@ -150,11 +170,12 @@ def main(argv=None):
                     print(f"  [{seen}] grok error: {e}", flush=True); continue
                 if not g:
                     print(f"  [{seen}] grok: no JSON, skip", flush=True); continue
-                row = build_row(item, g, a.lang, a.min_overlap)
-                if row:
-                    f.write(json.dumps({k: v for k, v in row.items() if k != "overlap"}, ensure_ascii=False) + "\n")
+                ev = evaluate(item, g, a.lang, a.min_overlap)
+                if ev["kept"]:
+                    f.write(json.dumps({"lang": ev["lang"], "nl": ev["nl"], "tags": ev["target"],
+                                        "rating": ev["rating"], "src": ev["url"]}, ensure_ascii=False) + "\n")
                     kept += 1
-                    print(f"  [{seen}] kept (overlap {row['overlap']}) · {len(row['tags'])} tags · {row['lang']}", flush=True)
+                    print(f"  [{seen}] kept (overlap {ev['overlap']}) · {len(ev['target'])} tags · {ev['lang']}", flush=True)
                 else:
                     print(f"  [{seen}] dropped (对照未过 / 标签太少)", flush=True)
                 time.sleep(0.2)

@@ -38,6 +38,14 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
 .gpu{color:var(--ok)}
 .hint{color:var(--mut);font-size:11px;margin-top:7px}
 .warn{color:var(--warn)}
+.cvprev{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.pv{background:var(--card2);border:1px solid var(--bd);border-radius:10px;overflow:hidden;font-size:11px}
+.pv img{width:100%;height:118px;object-fit:cover;display:block;background:#000}
+.pv .pb{padding:8px 9px}
+.pv .nl{color:var(--tx);line-height:1.5}
+.pv .tg{color:#a9d0ff;margin-top:5px;word-break:break-word}
+.pv .ov{margin-top:6px;display:flex;justify-content:space-between;color:var(--mut)}
+.pv .k{color:var(--ok)}.pv .x{color:var(--err)}
 </style>
 </head>
 <body>
@@ -69,7 +77,9 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
       <label>尺度 <select id="cv-nsfw"><option value="X">全(含 explicit)</option><option value="Mature">到 questionable</option><option value="Soft">到 sensitive</option><option value="None">只 safe</option></select></label>
       <label>范围 <select id="cv-scope"><option value="both">两者</option><option value="model">仅模型</option><option value="general">仅泛图</option></select></label>
       <button class="btn" data-step="civitai">抓图 + 描述</button></div>
-    <p class="hint">Grok 视觉按张计费,张数≈成本。需要上方 Grok key;抓 NSFW 建议配 Civitai token。</p></section>
+    <p class="hint">Grok 视觉按张计费,张数≈成本。需要上方 Grok key;抓 NSFW 建议配 Civitai token。</p>
+    <div class="ctl"><button class="btn ghost" id="cv-prev-btn">预览 5 条(先看质量,再跑全量)</button><span class="hint" id="cv-prev-hint"></span></div>
+    <div class="cvprev" id="cv-preview"></div></section>
 
   <section class="step"><div class="hd"><span class="num">3</span><h2>挖卡 · 可选</h2><span class="pill" id="p-cards">可选</span></div>
     <p class="desc">从你自己的卡片 PNG 挖内嵌 tag + 合成自然语言,最贴合你的画风。</p>
@@ -151,6 +161,20 @@ async function poll(){
   if(logEl.textContent!==txt){logEl.textContent=txt;if(atBottom)logEl.scrollTop=logEl.scrollHeight;}
   setTimeout(poll, running?1000:2500);
 }
+function esc(s){return (s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+$('#cv-prev-btn').onclick=async()=>{
+  const btn=$('#cv-prev-btn');btn.disabled=true;$('#cv-prev-hint').textContent='抓取 + Grok 描述中(约 20–40 秒)…';
+  const body={n:5,model_id:$('#cv-model').value.trim(),nsfw:$('#cv-nsfw').value,scope:$('#cv-scope').value,lang:'mix'};
+  let d;try{d=await fetch('/api/civitai/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());}catch(e){d={ok:false,error:e.message};}
+  btn.disabled=false;
+  if(!d.ok){$('#cv-prev-hint').textContent='预览失败:'+(d.error||'?');return;}
+  const kept=d.items.filter(i=>i.kept).length;
+  $('#cv-prev-hint').textContent='保留 '+kept+'/'+d.items.length+'(其余会被对照闸丢弃)';
+  const box=$('#cv-preview');box.innerHTML='';
+  d.items.forEach(it=>{const c=document.createElement('div');c.className='pv';
+    c.innerHTML='<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(it.url)+'"><div class="pb"><div class="nl">'+esc(it.nl||'(无描述)')+'</div><div class="tg">'+esc((it.target||[]).slice(0,10).join(', '))+'</div><div class="ov"><span>重合 '+it.overlap+'</span><span class="'+(it.kept?'k':'x')+'">'+(it.kept?'保留 ✓':'丢弃 ✗')+'</span></div></div>';
+    box.appendChild(c);});
+};
 loadKeys(); poll();
 </script>
 </body>

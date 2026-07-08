@@ -146,6 +146,21 @@ def build_studio_app(workdir):
         ok = start_job(step, cmd, workdir, extra)
         return {"ok": ok, "error": None if ok else "已有任务在运行"}
 
+    @app.post("/api/civitai/preview")
+    def civitai_preview(payload: dict = Body(...)):
+        from . import keys as K, collect_civitai as CC
+        k = K.resolve(workdir)
+        if not k["grok"]:
+            return {"ok": False, "error": "请先在密钥面板填入 Grok key", "items": []}
+        p = payload or {}
+        try:
+            items = CC.preview(int(p.get("n", 5)), str(p.get("model_id", "")).strip(),
+                               p.get("nsfw", "X"), p.get("scope", "both"),
+                               k["civitai"], k["grok"], lang=p.get("lang", "mix"))
+            return {"ok": True, "items": items}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "items": []}
+
     @app.get("/api/keys")
     def get_keys():
         from . import keys as K
