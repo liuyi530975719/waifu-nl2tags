@@ -34,7 +34,7 @@ def _parse_model_id(s):
     return m.group(1) if m else None
 
 def _civitai_page(params, key):
-    url = CIVITAI + "?" + urllib.parse.urlencode(params)
+    url = CIVITAI + "?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
     req = urllib.request.Request(url, headers={"User-Agent": "nl2tags"})
     if key:
         req.add_header("Authorization", "Bearer " + key)
@@ -152,7 +152,7 @@ def probe(key, nsfw, model_id=None, sort="Most Reactions", period="AllTime", lim
     params = {"limit": limit, "sort": sort, "period": period, "nsfw": nsfw}
     if mid:
         params["modelId"] = mid
-    info = {"url": CIVITAI + "?" + urllib.parse.urlencode(params), "modelId": mid,
+    info = {"url": CIVITAI + "?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote), "modelId": mid,
             "status": None, "raw": 0, "with_prompt": 0, "err": "", "raw_base": None, "base_err": ""}
     # baseline: does the API work at all (plain call, no filters)?
     try:
