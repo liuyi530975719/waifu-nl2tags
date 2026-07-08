@@ -8,6 +8,7 @@ HELP = """nl2tags — natural language (中/EN) -> Illustrious/NoobAI Danbooru t
 usage: nl2tags <command> [args]
 
   quickstart              generate demo data + print the train command
+  studio                  step-by-step training wizard (web UI)
   presets                 list model presets (fine-tune + zero-shot)
   doctor                  check GPU / deps and recommend a preset
   gen [--n N --lang mix]  synthesize NL<->tag pairs        -> data/synth.jsonl
@@ -24,7 +25,7 @@ examples:
   nl2tags infer --adapter out/adapter "银发猫娘女仆，红眼睛，室内"
 """
 
-SUB = {"gen": "synth_data", "cards": "caption_cards", "dataset": "make_dataset",
+SUB = {"studio": "studio", "gen": "synth_data", "cards": "caption_cards", "dataset": "make_dataset",
        "train": "train_qlora", "infer": "infer", "baseline": "baseline", "serve": "serve"}
 
 def doctor():
