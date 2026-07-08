@@ -102,7 +102,7 @@ inp.addEventListener('input',setCount);
 const exBox=$('#examples');
 EX.forEach(t=>{const c=document.createElement('span');c.className='chip';c.textContent=t.length>24?t.slice(0,24)+'…':t;c.title=t;c.onclick=()=>{inp.value=t;setCount();inp.focus()};exBox.appendChild(c);});
 fetch(BASE+'/info').then(r=>r.json()).then(d=>{if(d&&d.model)$('#sub').textContent='当前模型: '+d.model+'（'+d.mode+'）';}).catch(()=>{});
-fetch(BASE+'/models').then(r=>r.json()).then(d=>{const ms=(d&&d.models)||[];if(!ms.length)return;const sel=$('#model');ms.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sel.appendChild(o);});$('#mwrap').style.display='';}).catch(()=>{});
+fetch(BASE+'/models').then(r=>r.json()).then(d=>{const ms=(d&&d.models)||[];if(!ms.length)return;const sel=$('#model');ms.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sel.appendChild(o);});sel.value=ms[0];$('#mwrap').style.display='';}).catch(()=>{});
 async function translate(){
   const text=inp.value.trim();
   if(!text){inp.focus();return;}
@@ -113,6 +113,7 @@ async function translate(){
     const r=await fetch(BASE+'/translate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
+    if(d.error){meta.className='meta err';meta.textContent='后端出错:'+d.error+' — 多半是 Ollama 没这个模型名(ollama list 看看)或没在跑。';return;}
     last=(d.prompt||'').trim();
     out.className='out';out.textContent=last||'(空)';
     meta.textContent=last?(last.split(',').filter(x=>x.trim()).length+' 个 tag'):'';

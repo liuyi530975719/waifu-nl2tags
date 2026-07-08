@@ -50,7 +50,10 @@ def build_app(translate_fn, info=None, models_fn=None):
             "quality": bool(p.get("quality", True)),
             "model": (p.get("model") or None),
         }
-        return {"prompt": translate_fn(p.get("text", ""), opts)}
+        try:
+            return {"prompt": translate_fn(p.get("text", ""), opts)}
+        except BaseException as e:
+            return {"prompt": "", "error": f"{type(e).__name__}: {e}"}
 
     return app
 
@@ -76,6 +79,8 @@ def main(argv=None):
     get_fmt = _formatter_cache()
 
     if a.proxy:
+        os.environ.setdefault("OAI_BASE_URL", "http://localhost:11434/v1")  # default: local Ollama
+        os.environ.setdefault("OAI_API_KEY", "ollama")
         from .baseline import call_llm, postprocess, list_models
         info = {"mode": "proxy", "model": os.getenv("OAI_MODEL", "OAI endpoint")}
         models_fn = list_models

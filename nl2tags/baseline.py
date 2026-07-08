@@ -19,14 +19,14 @@ from .illustrious import default_formatter, detect_rating, RATING_WORDS
 def call_llm(nl: str, model=None) -> str:
     base = os.getenv("OAI_BASE_URL"); key = os.getenv("OAI_API_KEY")
     if not (base and key):
-        raise SystemExit("Set OAI_BASE_URL, OAI_API_KEY, OAI_MODEL (any OpenAI-compatible endpoint).")
+        raise RuntimeError("OAI_BASE_URL / OAI_API_KEY 未设置(proxy 模式需要,例如 Ollama)。")
     body = json.dumps({"model": model or os.getenv("OAI_MODEL", "gpt-4o-mini"),
                        "messages": build_messages(nl, fewshot=True),
                        "temperature": 0.4, "max_tokens": 160}).encode()
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=body,
                                  headers={"Authorization": "Bearer " + key,
                                           "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=180) as r:
         return json.loads(r.read())["choices"][0]["message"]["content"].strip()
 
 def postprocess(raw: str, fmt=None, rating=None, add_quality=True) -> str:
