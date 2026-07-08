@@ -17,6 +17,7 @@ _JOB = {"proc": None, "step": None, "log": [], "running": False, "returncode": N
 _LOCK = threading.Lock()
 _GPU = None
 _CURATE = {"adding": False, "done": 0, "total": 0, "added": 0}
+_FETCH = {"fetching": False, "found": 0, "scanned": 0, "items": [], "err": ""}
 _CLOCK = threading.Lock()
 
 def _pool_count(workdir):
@@ -50,6 +51,29 @@ def _curate_worker(items, workdir, grok_key, lang):
     with _CLOCK:
         _CURATE["adding"] = False
         _CURATE["added"] = added
+
+def _fetch_worker(key, n, nsfw, model_id):
+    from . import collect_civitai as CC
+    import random as _r
+    mid = CC._parse_model_id(model_id)
+    period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
+    out, scanned = [], 0
+    try:
+        for it in CC.fetch_images(key, n * 4, nsfw, model_id=mid, sort="Most Reactions", period=period):
+            scanned += 1
+            tags = CC.prompt_to_tags(it["prompt"], strip_quality=True)
+            if len(tags) >= 4:
+                out.append({"url": it["url"], "prompt": it["prompt"],
+                            "nsfw": it["nsfw"], "tags_preview": tags[:12]})
+            with _CLOCK:
+                _FETCH["found"] = len(out); _FETCH["scanned"] = scanned
+            if len(out) >= n:
+                break
+    except Exception as e:
+        with _CLOCK:
+            _FETCH["err"] = str(e)
+    with _CLOCK:
+        _FETCH["items"] = out; _FETCH["fetching"] = False
 
 def _gpu():
     global _GPU
@@ -171,17 +195,20 @@ def build_studio_app(workdir):
 
     @app.post("/api/curate/fetch")
     def curate_fetch(payload: dict = Body(...)):
-        from . import keys as K, collect_civitai as CC
+        from . import keys as K
+        with _CLOCK:
+            if _FETCH["fetching"]:
+                return {"ok": False, "error": "正在抓取,请稍候"}
         k = K.resolve(workdir)
         if not k["grok"]:
-            return {"ok": False, "error": "请先在密钥面板填入 Grok key(加入池子时要用)", "items": []}
+            return {"ok": False, "error": "请先在密钥面板填入 Grok key(加入池子时要用)"}
         p = payload or {}
-        try:
-            items = CC.fetch_batch(k["civitai"], int(p.get("n", 24)), p.get("nsfw", "X"),
-                                   str(p.get("model_id", "")).strip() or None)
-            return {"ok": True, "items": items}
-        except Exception as e:
-            return {"ok": False, "error": str(e), "items": []}
+        with _CLOCK:
+            _FETCH.update(fetching=True, found=0, scanned=0, items=[], err="")
+        threading.Thread(target=_fetch_worker,
+                         args=(k["civitai"], int(p.get("n", 24)), p.get("nsfw", "X"),
+                               str(p.get("model_id", "")).strip() or None), daemon=True).start()
+        return {"ok": True, "started": True}
 
     @app.post("/api/curate/add")
     def curate_add(payload: dict = Body(...)):
@@ -206,8 +233,13 @@ def build_studio_app(workdir):
     def curate_state():
         with _CLOCK:
             c = dict(_CURATE)
+            f = {"fetching": _FETCH["fetching"], "found": _FETCH["found"],
+                 "scanned": _FETCH["scanned"], "err": _FETCH["err"]}
+            if not _FETCH["fetching"]:
+                f["items"] = _FETCH["items"]
         c["pool"] = _pool_count(workdir)
         c["target"] = int(os.getenv("NL2TAGS_ROUND", "200"))
+        c["fetch"] = f
         return c
 
     @app.post("/api/curate/reset")

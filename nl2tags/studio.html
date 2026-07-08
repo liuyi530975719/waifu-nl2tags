@@ -108,7 +108,7 @@ const esc=s=>(s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"
 const STEPS=['gen','civitai','cards','dataset','train','infer'];
 const PILL={gen:'p-gen',civitai:'p-civitai',cards:'p-cards',dataset:'p-dataset',train:'p-train',infer:'p-infer'};
 const ART={gen:'synth',civitai:'pool',cards:'cards',dataset:'dataset',train:'adapter'};
-let running=false, atBottom=true, adding=false;
+let running=false, atBottom=true, adding=false, fetchWatch=false;
 const logEl=$('#log');
 logEl.addEventListener('scroll',()=>{atBottom=logEl.scrollTop+logEl.clientHeight>=logEl.scrollHeight-8;});
 function params(step){
@@ -146,11 +146,10 @@ function renderGal(){const box=$('#cv-gal');box.innerHTML='';
   updAdd();
 }
 $('#cv-fetch').onclick=async()=>{
-  const btn=$('#cv-fetch');btn.disabled=true;$('#cv-addhint').textContent='抓取中…';
+  const btn=$('#cv-fetch');btn.disabled=true;$('#cv-addhint').textContent='开始抓取…';gal=[];sel=new Set();renderGal();
   let d;try{d=await fetch('/api/curate/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:+$('#cv-batch').value,model_id:$('#cv-model').value.trim(),nsfw:$('#cv-nsfw').value})}).then(r=>r.json());}catch(e){d={ok:false,error:e.message};}
-  btn.disabled=false;
-  if(!d.ok){$('#cv-addhint').textContent='抓取失败:'+(d.error||'?');return;}
-  gal=d.items||[];sel=new Set();$('#cv-addhint').textContent='抓到 '+gal.length+' 张,点选你想要的,再「加入池子」';renderGal();
+  if(!d.ok){btn.disabled=false;$('#cv-addhint').textContent='抓取失败:'+(d.error||'?');return;}
+  fetchWatch=true;pollCurate();
 };
 $('#cv-add').onclick=async()=>{
   if(!sel.size)return;
@@ -170,8 +169,15 @@ async function pollCurate(){
   $('#pool-txt').textContent=txt;
   adding=!!c.adding;updAdd();
   const pill=$('#p-civitai');if((c.pool||0)>0&&!c.adding){pill.className='pill done';pill.textContent='池子 '+c.pool;}
-  if(c.adding){setTimeout(pollCurate,1200);}
-  else if(c.total){$('#cv-addhint').textContent='已加入 '+c.added+'/'+c.total+'(无有效 prompt 的被跳过)';}
+  let handledFetch=false; const F=c.fetch||{};
+  if(F.fetching){$('#cv-fetch').disabled=true;$('#cv-addhint').textContent='抓取中… 已找到 '+(F.found||0)+' 张(扫描 '+(F.scanned||0)+' 张)';}
+  else if(fetchWatch){fetchWatch=false;handledFetch=true;$('#cv-fetch').disabled=false;gal=F.items||[];sel=new Set();renderGal();
+    if(F.err)$('#cv-addhint').textContent='抓取出错:'+F.err;
+    else if(!gal.length)$('#cv-addhint').textContent='抓到 0 张 —— 该模型的图可能没带 prompt;抓 NSFW 需在密钥面板填 Civitai token;也可清空模型框抓泛图。';
+    else $('#cv-addhint').textContent='抓到 '+gal.length+' 张,点选想要的再「加入池子」';}
+  const busy=c.adding||F.fetching||fetchWatch;
+  if(busy){setTimeout(pollCurate,1000);}
+  else if(c.total&&!handledFetch){$('#cv-addhint').textContent='已加入 '+c.added+'/'+c.total+'(无有效 prompt 的被跳过)';}
 }
 // main job poll
 function fmtE(s){const m=Math.floor(s/60),ss=s%60;return m?`${m}分${ss}秒`:`${ss}秒`;}
