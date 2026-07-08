@@ -18,6 +18,7 @@ _LOCK = threading.Lock()
 _GPU = None
 _CURATE = {"adding": False, "done": 0, "total": 0, "added": 0, "err": ""}
 _FETCH = {"fetching": False, "found": 0, "scanned": 0, "items": [], "err": "", "diag": {}}
+_TEACHER = {"running": False, "done": 0, "total": 0, "added": 0, "err": "", "stop": False}
 _CLOCK = threading.Lock()
 
 def _pool_count(workdir):
@@ -89,6 +90,38 @@ def _fetch_worker(key, n, nsfw, model_id):
             diag = {"err": f"probe failed: {e}"}
     with _CLOCK:
         _FETCH["items"] = out; _FETCH["diag"] = diag; _FETCH["fetching"] = False
+
+def _teacher_worker(n, workdir, base_url, api_key, model, lang, nsfw):
+    from . import gen_teacher as GT
+    import random as _r
+    pool = Path(workdir) / "data" / "pool.jsonl"
+    pool.parent.mkdir(parents=True, exist_ok=True)
+    seen = GT.load_seen(pool)
+    rng = _r.Random()
+    use_llm = bool(base_url and model)
+    added = 0
+    first_err = ""
+    with open(pool, "a", encoding="utf-8") as f:
+        for i in range(n):
+            with _CLOCK:
+                if _TEACHER["stop"]:
+                    break
+            try:
+                row = GT.generate_one(rng, base_url, api_key, model, lang, nsfw, use_llm)
+            except Exception as e:
+                row = None
+                if not first_err:
+                    first_err = f"{type(e).__name__}: {e}"
+            if row:
+                key = (row["nl"], tuple(row["tags"]))
+                if key not in seen:
+                    seen.add(key)
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n"); f.flush()
+                    added += 1
+            with _CLOCK:
+                _TEACHER["done"] = i + 1; _TEACHER["added"] = added
+    with _CLOCK:
+        _TEACHER["running"] = False; _TEACHER["added"] = added; _TEACHER["err"] = first_err
 
 def _gpu():
     global _GPU
@@ -265,6 +298,56 @@ def build_studio_app(workdir):
             f.rename(f.with_name(f"pool_used_{int(time.time())}.jsonl"))
         return {"ok": True, "pool": 0}
 
+    @app.post("/api/teacher/gen")
+    def teacher_gen(payload: dict = Body(...)):
+        from . import keys as K
+        with _CLOCK:
+            if _TEACHER["running"]:
+                return {"ok": False, "error": "正在生成,请稍候"}
+        p = payload or {}
+        endpoint = p.get("endpoint", "grok")
+        model = (p.get("model") or "").strip()
+        if endpoint == "grok":
+            k = K.resolve(workdir)
+            if not k["grok"]:
+                return {"ok": False, "error": "请先在密钥面板填入 Grok key(当老师用)"}
+            base_url, api_key = "https://api.x.ai/v1", k["grok"]
+            model = model or "grok-2-1212"
+        elif endpoint == "local":
+            base_url = (p.get("base_url") or "http://localhost:11434/v1").strip()
+            api_key = "ollama"
+            if not model:
+                return {"ok": False, "error": "本地模式请填 Ollama 模型名(如 qwen2.5:32b)"}
+        elif endpoint == "template":
+            base_url, api_key, model = "", "", ""   # offline, no LLM
+        else:  # custom
+            base_url = (p.get("base_url") or "").strip()
+            api_key = (p.get("api_key") or "").strip()
+            if not (base_url and model):
+                return {"ok": False, "error": "custom 模式需要 base_url + model"}
+        n = max(1, min(int(p.get("n", 200)), 20000))
+        with _CLOCK:
+            _TEACHER.update(running=True, done=0, total=n, added=0, err="", stop=False)
+        threading.Thread(target=_teacher_worker,
+                         args=(n, workdir, base_url, api_key, model,
+                               p.get("lang", "mix"), p.get("nsfw", "all")),
+                         daemon=True).start()
+        return {"ok": True, "total": n}
+
+    @app.get("/api/teacher/state")
+    def teacher_state():
+        with _CLOCK:
+            t = dict(_TEACHER)
+        t["pool"] = _pool_count(workdir)
+        t["target"] = int(os.getenv("NL2TAGS_ROUND", "200"))
+        return t
+
+    @app.post("/api/teacher/stop")
+    def teacher_stop():
+        with _CLOCK:
+            _TEACHER["stop"] = True
+        return {"ok": True}
+
     @app.post("/api/run")
     def run(payload: dict = Body(...)):
         step = (payload or {}).get("step")
@@ -334,3 +417,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
+# v0.8.0 — teacher-data step (gen_teacher) replaces the dead Civitai fetch

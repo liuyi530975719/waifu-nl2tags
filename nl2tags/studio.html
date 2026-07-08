@@ -56,7 +56,7 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
 
   <section class="card keys">
     <div class="hd"><h2>🔑 API 密钥</h2><span class="pill" id="p-keys">未配置</span></div>
-    <p class="desc">Civitai 抓图 + Grok 视觉描述用。<span class="warn">密钥只存本机,绝不进仓库</span>。勾「记住」写到本机 <code>keys.local.json</code>(已 gitignore)。</p>
+    <p class="desc">第 2 步用 Grok 当"老师"生成数据时填 <b>Grok key</b> 即可(选本地 Ollama / 离线模板当老师则不用填)。<span class="warn">密钥只存本机,绝不进仓库</span>。勾「记住」写到本机 <code>keys.local.json</code>(已 gitignore)。</p>
     <div class="kr"><label><span class="dot" id="d-civitai"></span>Civitai</label><input type="password" id="k-civitai" class="path" placeholder="Civitai API token(抓 NSFW 需要)"></div>
     <div class="kr"><label><span class="dot" id="d-grok"></span>Grok</label><input type="password" id="k-grok" class="path" placeholder="xAI / Grok API key"></div>
     <div class="kr"><label>视觉模型</label><input type="text" id="k-gmodel" class="path" placeholder="grok-2-vision-1212(看图用;不确定就留默认)"></div>
@@ -69,18 +69,22 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
       <label>语言 <select id="gen-lang"><option value="mix">中英混</option><option value="zh">中文</option><option value="en">英文</option></select></label>
       <button class="btn" data-step="gen">运行</button></div></section>
 
-  <section class="step"><div class="hd"><span class="num">2</span><h2>策展 · 从 Civitai 挑图建池子</h2><span class="pill" id="p-civitai">待办</span></div>
-    <p class="desc">随机抓一批高分图(免费)→ 点选你想要的 → 「加入池子」时才用 Grok 描述(只花选中的钱)。池子满 <span id="cv-target">200</span> 就够一轮,去第 4、5 步建集训练。</p>
+  <section class="step"><div class="hd"><span class="num">2</span><h2>教师数据 · LLM 批量生成 NL→tag</h2><span class="pill" id="p-teacher">待办</span></div>
+    <p class="desc">让一个强模型当"老师",按随机配方批量生成多样、无偏的(自然语言 ↔ Illustrious tag)对,写进池子——覆盖由配方控制,不爬站、无偏。<span class="warn">成人向,已内建排除未成年过滤</span>。池子满 <span id="tc-target">200</span> 就够一轮,去第 4、5 步建集训练。</p>
     <div class="ctl">
-      <input class="path" type="text" id="cv-model" placeholder="Civitai 模型链接或 modelId(留空=泛图)">
-      <label>尺度 <select id="cv-nsfw"><option value="X">全(含 explicit)</option><option value="Mature">到 questionable</option><option value="Soft">到 sensitive</option><option value="None">只 safe</option></select></label>
-      <label>每批 <input type="number" id="cv-batch" value="24" min="6" max="60" style="width:70px"></label>
-      <button class="btn" id="cv-fetch">随机抓一批</button>
+      <label>老师 <select id="tc-endpoint">
+        <option value="grok">Grok(用上面的 key)</option>
+        <option value="local">本地 Ollama(免费)</option>
+        <option value="template">离线模板(不调模型)</option></select></label>
+      <input class="path" type="text" id="tc-model" placeholder="模型名:Grok 默认 grok-2-1212;本地填如 qwen2.5:32b" style="min-width:220px">
+      <label>条数 <input type="number" id="tc-n" value="200" min="10" step="50" style="width:90px"></label>
+      <label>语言 <select id="tc-lang"><option value="mix">中英混</option><option value="zh">中文</option><option value="en">英文</option></select></label>
+      <label>尺度 <select id="tc-nsfw"><option value="all">全(含 explicit)</option><option value="mild">到 sensitive</option><option value="none">只 safe</option></select></label>
+      <button class="btn" id="tc-gen">生成</button><button class="btn ghost" id="tc-stop" style="display:none">停止</button>
     </div>
     <div class="poolbar"><div class="pbar"><div class="pfill" id="pool-fill"></div></div><span id="pool-txt">池子 0 / 200</span>
-      <button class="btn" id="cv-add" disabled>加入池子 (0)</button><button class="btn ghost" id="pool-reset">清空</button></div>
-    <div class="hint" id="cv-addhint">点「随机抓一批」开始。</div>
-    <div class="gal" id="cv-gal"></div></section>
+      <button class="btn ghost" id="pool-reset">清空池子</button></div>
+    <div class="hint" id="tc-hint">选老师 → 点「生成」。本地 Ollama / 离线模板都免费。</div></section>
 
   <section class="step"><div class="hd"><span class="num">3</span><h2>挖卡 · 可选</h2><span class="pill" id="p-cards">可选</span></div>
     <p class="desc">从你自己的卡片 PNG 挖内嵌 tag + 合成自然语言,最贴合你的画风。</p>
@@ -106,10 +110,10 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>(s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-const STEPS=['gen','civitai','cards','dataset','train','infer'];
-const PILL={gen:'p-gen',civitai:'p-civitai',cards:'p-cards',dataset:'p-dataset',train:'p-train',infer:'p-infer'};
-const ART={gen:'synth',civitai:'pool',cards:'cards',dataset:'dataset',train:'adapter'};
-let running=false, atBottom=true, adding=false, fetchWatch=false;
+const STEPS=['gen','teacher','cards','dataset','train','infer'];
+const PILL={gen:'p-gen',teacher:'p-teacher',cards:'p-cards',dataset:'p-dataset',train:'p-train',infer:'p-infer'};
+const ART={gen:'synth',teacher:'pool',cards:'cards',dataset:'dataset',train:'adapter'};
+let running=false, atBottom=true, teaching=false;
 const logEl=$('#log');
 logEl.addEventListener('scroll',()=>{atBottom=logEl.scrollTop+logEl.clientHeight>=logEl.scrollHeight-8;});
 function params(step){
@@ -138,48 +142,29 @@ $('#save-keys').onclick=async()=>{
   await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({civitai:$('#k-civitai').value.trim(),grok:$('#k-grok').value.trim(),grok_model:$('#k-gmodel').value.trim(),save:$('#k-save').checked})});
   $('#k-civitai').value='';$('#k-grok').value='';loadKeys();
 };
-// curation gallery
-let gal=[], sel=new Set();
-function updAdd(){const b=$('#cv-add');b.textContent='加入池子 ('+sel.size+')';b.disabled=sel.size===0||adding;}
-function renderGal(){const box=$('#cv-gal');box.innerHTML='';
-  gal.forEach((it,i)=>{const d=document.createElement('div');d.className='gi'+(sel.has(i)?' sel':'');
-    d.innerHTML='<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(it.url)+'"><div class="ck">✓</div>';
-    d.onclick=()=>{sel.has(i)?sel.delete(i):sel.add(i);d.classList.toggle('sel');updAdd();};box.appendChild(d);});
-  updAdd();
-}
-$('#cv-fetch').onclick=async()=>{
-  const btn=$('#cv-fetch');btn.disabled=true;$('#cv-addhint').textContent='开始抓取…';gal=[];sel=new Set();renderGal();
-  let d;try{d=await fetch('/api/curate/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:+$('#cv-batch').value,model_id:$('#cv-model').value.trim(),nsfw:$('#cv-nsfw').value})}).then(r=>r.json());}catch(e){d={ok:false,error:e.message};}
-  if(!d.ok){btn.disabled=false;$('#cv-addhint').textContent='抓取失败:'+(d.error||'?');return;}
-  fetchWatch=true;pollCurate();
+// teacher data generation
+$('#tc-gen').onclick=async()=>{
+  const btn=$('#tc-gen');btn.disabled=true;$('#tc-hint').textContent='启动中…';
+  const body={endpoint:$('#tc-endpoint').value,model:$('#tc-model').value.trim(),n:+$('#tc-n').value,lang:$('#tc-lang').value,nsfw:$('#tc-nsfw').value};
+  let r;try{r=await fetch('/api/teacher/gen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());}catch(e){r={ok:false,error:e.message};}
+  if(!r.ok){btn.disabled=false;$('#tc-hint').textContent='无法启动:'+(r.error||'?');return;}
+  teaching=true;$('#tc-stop').style.display='';pollTeacher();
 };
-$('#cv-add').onclick=async()=>{
-  if(!sel.size)return;
-  const items=[...sel].map(i=>gal[i]);
-  const r=await fetch('/api/curate/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items,lang:'mix'})}).then(x=>x.json()).catch(e=>({ok:false,error:e.message}));
-  if(!r.ok){$('#cv-addhint').textContent='加入失败:'+(r.error||'?');return;}
-  adding=true;const rm=new Set(sel);gal=gal.filter((_,i)=>!rm.has(i));sel=new Set();renderGal();pollCurate();
-};
-$('#pool-reset').onclick=async()=>{if(!confirm('清空池子?(会把现有 pool.jsonl 归档)'))return;await fetch('/api/curate/reset',{method:'POST'});pollCurate();};
-async function pollCurate(){
-  let c;try{c=await fetch('/api/curate/state').then(r=>r.json());}catch(e){return;}
-  const tgt=c.target||200;$('#cv-target').textContent=tgt;
+$('#tc-stop').onclick=async()=>{await fetch('/api/teacher/stop',{method:'POST'});$('#tc-hint').textContent='停止中…';};
+$('#pool-reset').onclick=async()=>{if(!confirm('清空池子?(会把现有 pool.jsonl 归档)'))return;await fetch('/api/curate/reset',{method:'POST'});pollTeacher();};
+async function pollTeacher(){
+  let c;try{c=await fetch('/api/teacher/state').then(r=>r.json());}catch(e){return;}
+  const tgt=c.target||200;$('#tc-target').textContent=tgt;
   $('#pool-fill').style.width=Math.min(100,100*(c.pool||0)/tgt)+'%';
   let txt='池子 '+(c.pool||0)+' / '+tgt;
-  if(c.adding)txt+=' · Grok 描述中 '+c.done+'/'+c.total;
+  if(c.running)txt+=' · 老师生成中 '+c.done+'/'+c.total+'(新增 '+c.added+')';
   if((c.pool||0)>=tgt)txt+=' · 够一轮啦!去第4步建集 → 第5步训练';
   $('#pool-txt').textContent=txt;
-  adding=!!c.adding;updAdd();
-  const pill=$('#p-civitai');if((c.pool||0)>0&&!c.adding){pill.className='pill done';pill.textContent='池子 '+c.pool;}
-  let handledFetch=false; const F=c.fetch||{};
-  if(F.fetching){$('#cv-fetch').disabled=true;$('#cv-addhint').textContent='抓取中… 已找到 '+(F.found||0)+' 张(扫描 '+(F.scanned||0)+' 张)';}
-  else if(fetchWatch){fetchWatch=false;handledFetch=true;$('#cv-fetch').disabled=false;gal=F.items||[];sel=new Set();renderGal();
-    if(F.err)$('#cv-addhint').textContent='抓取出错:'+F.err;
-    else if(!gal.length){const dg=F.diag||{};$('#cv-addhint').textContent='抓到 0 张 —— 本次查询 Civitai 返回 '+(dg.raw||0)+' 张(带prompt '+(dg.with_prompt||0)+')'+(dg.status?(' HTTP'+dg.status):'')+(dg.err?(' '+dg.err):'')+' | 基础探测返回 '+(dg.raw_base==null?'?':dg.raw_base)+' 张'+(dg.base_err?(' '+dg.base_err):'')+'。基础=0→鉴权/地区/网络问题(检查 token、或服务器被 Civitai 区域限制);基础>0 但本次=0→尺度/modelId 问题。';}
-    else $('#cv-addhint').textContent='抓到 '+gal.length+' 张,点选想要的再「加入池子」';}
-  const busy=c.adding||F.fetching||fetchWatch;
-  if(busy){setTimeout(pollCurate,1000);}
-  else if(c.total&&!handledFetch){$('#cv-addhint').textContent='已加入 '+c.added+'/'+c.total+(c.err?(' · Grok 报错:'+c.err+'(去密钥面板换视觉模型名)'):'(其余无有效 prompt 被跳过)');}
+  teaching=!!c.running;
+  const pill=$('#p-teacher');if((c.pool||0)>0&&!c.running){pill.className='pill done';pill.textContent='池子 '+c.pool;}
+  if(c.running){$('#tc-gen').disabled=true;$('#tc-stop').style.display='';$('#tc-hint').textContent='生成中… '+c.done+'/'+c.total+',已入池 '+c.added+' 条'+(c.err?(' · 老师报错:'+c.err):'');setTimeout(pollTeacher,1000);}
+  else{$('#tc-gen').disabled=false;$('#tc-stop').style.display='none';
+    if(c.total)$('#tc-hint').textContent='本轮完成:新增 '+c.added+' 条(共扫 '+c.done+')'+(c.err?(' · 老师报错:'+c.err+' —— 检查模型名/endpoint'):'');}
 }
 // main job poll
 function fmtE(s){const m=Math.floor(s/60),ss=s%60;return m?`${m}分${ss}秒`:`${ss}秒`;}
@@ -190,7 +175,7 @@ async function poll(){
   const job=d.job||{};running=!!job.running;
   STEPS.forEach(s=>{const pill=document.getElementById(PILL[s]);if(!pill)return;
     if(running&&job.step===s){pill.className='pill run';pill.textContent='运行中'+(job.elapsed?' · '+fmtE(job.elapsed):'');}
-    else if(s==='civitai'){/* handled by pollCurate */}
+    else if(s==='teacher'){/* handled by pollTeacher */}
     else if(ART[s]&&d.artifacts[ART[s]]){pill.className='pill done';pill.textContent='完成 ✓';}
     else{pill.className='pill';pill.textContent=(s==='cards'?'可选':'待办');}
   });
@@ -201,7 +186,7 @@ async function poll(){
   if(logEl.textContent!==txt){logEl.textContent=txt;if(atBottom)logEl.scrollTop=logEl.scrollHeight;}
   setTimeout(poll, running?1000:2500);
 }
-loadKeys(); poll(); pollCurate();
+loadKeys(); poll(); pollTeacher();
 </script>
 </body>
 </html>
