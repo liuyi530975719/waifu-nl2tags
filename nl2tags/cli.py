@@ -7,6 +7,7 @@ HELP = """nl2tags — natural language (中/EN) -> Illustrious/NoobAI Danbooru t
 
 usage: nl2tags <command> [args]
 
+  version                 show installed version + where it loads from
   quickstart              generate demo data + print the train command
   studio                  step-by-step training wizard (web UI)
   presets                 list model presets (fine-tune + zero-shot)
@@ -68,6 +69,12 @@ def main(argv=None):
     if not argv or argv[0] in ("-h", "--help", "help"):
         print(HELP); return
     cmd, rest = argv[0], argv[1:]
+    if cmd in ("version", "--version", "-V"):
+        import nl2tags, os
+        print("waifu-nl2tags", nl2tags.__version__)
+        print("module :", os.path.dirname(nl2tags.__file__))
+        print("python :", sys.executable)
+        return
     if cmd == "presets":
         return presets.print_table()
     if cmd == "doctor":
