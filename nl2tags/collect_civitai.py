@@ -132,6 +132,23 @@ def preview(n, model_id, nsfw, scope, civitai_key, grok_key, lang="mix", min_ove
             break
     return out
 
+
+def fetch_batch(key, n, nsfw, model_id=None):
+    """Fetch a varied batch of images (with usable prompts) for human curation.
+    No Grok here — captioning happens only on the ones the user selects."""
+    import random as _r
+    period = _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
+    out = []
+    for it in fetch_images(key, n * 3, nsfw, model_id=(model_id or None),
+                           sort="Most Reactions", period=period):
+        tags = prompt_to_tags(it["prompt"], strip_quality=True)
+        if len(tags) >= 4:
+            out.append({"url": it["url"], "prompt": it["prompt"],
+                        "nsfw": it["nsfw"], "tags_preview": tags[:12]})
+        if len(out) >= n:
+            break
+    return out
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="nl2tags collect-civitai")
     ap.add_argument("--limit", type=int, default=200)
