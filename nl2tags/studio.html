@@ -103,7 +103,7 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
     <div class="ctl"><label>档位 <select id="train-preset"><option value="max">max · Qwen3-32B</option><option value="strong">strong · 14B</option><option value="balanced">balanced · 8B</option><option value="fast">fast · 1.7B</option></select></label>
       <label>epochs <input type="number" id="train-epochs" value="3" min="1" max="10" style="width:70px"></label><label><input type="checkbox" id="train-mgpu" checked> 双卡</label>
       <button class="btn" data-step="train">开始训练</button></div>
-    <p class="hint">两张卡一起加速:accelerate launch -m nl2tags.train_qlora --preset max</p></section>
+    <p class="hint">双卡:Linux 走 accelerate 多进程;Windows 无 NCCL → 自动改单进程 device_map=auto,照样吃满两张卡。</p></section>
 
   <section class="step"><div class="hd"><span class="num">6</span><h2>试用</h2><span class="pill" id="p-infer">待办</span></div>
     <div class="ctl"><input class="path" type="text" id="infer-text" value="银发猫娘女仆，红眼睛，室内，回眸"><button class="btn" data-step="infer">翻译一下</button></div></section>

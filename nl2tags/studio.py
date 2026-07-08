@@ -202,7 +202,10 @@ def _cmd(step, p, workdir):
         targs = ["--preset", p.get("preset", "max"), "--epochs", str(p.get("epochs", 3)),
                  "--train", "data/train.jsonl", "--val", "data/val.jsonl", "--out", "out/adapter"]
         ngpu = len(_gpu())
-        if ngpu >= 2 and p.get("multi_gpu", True):
+        # Windows has no NCCL, so accelerate --multi_gpu (DDP) can't launch there.
+        # Run a single process instead — train_qlora then uses device_map="auto",
+        # which shards the model across ALL visible GPUs (both cards still used).
+        if ngpu >= 2 and p.get("multi_gpu", True) and os.name != "nt":
             return py + ["accelerate.commands.launch", "--multi_gpu", "--num_processes", str(ngpu),
                          "--mixed_precision", "bf16", "-m", "nl2tags.train_qlora"] + targs
         return py + ["nl2tags.train_qlora"] + targs
@@ -396,15 +399,31 @@ def build_studio_app(workdir):
                 return {"ok": False, "error": "custom 需要 base_url", "models": []}
         else:
             return {"ok": True, "models": []}   # template: no LLM
+        root = base_url.rstrip("/")
+        # 1) OpenAI-compatible /v1/models (Grok, custom, and modern Ollama)
         try:
-            req = urllib.request.Request(base_url.rstrip("/") + "/models",
+            req = urllib.request.Request(root + "/models",
                                          headers={"Authorization": "Bearer " + (api_key or "x")})
             with urllib.request.urlopen(req, timeout=15) as r:
                 data = _j.loads(r.read())
             models = sorted(m.get("id") for m in data.get("data", []) if m.get("id"))
-            return {"ok": True, "models": models}
+            if models or endpoint != "local":
+                return {"ok": True, "models": models}
         except Exception as e:
-            return {"ok": False, "error": str(e)[:200], "models": []}
+            if endpoint != "local":
+                return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:180]}", "models": []}
+        # 2) local only: fall back to Ollama's native /api/tags
+        ollama_root = root[:-3].rstrip("/") if root.endswith("/v1") else root
+        try:
+            req = urllib.request.Request(ollama_root + "/api/tags")
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = _j.loads(r.read())
+            models = sorted(m.get("name") for m in data.get("models", []) if m.get("name"))
+            if models:
+                return {"ok": True, "models": models}
+            return {"ok": False, "error": "Ollama 在跑但没下载模型 —— 先在那台机 `ollama pull qwen2.5:32b`", "models": []}
+        except Exception as e:
+            return {"ok": False, "error": f"连不上 Ollama（{ollama_root}）—— 确认studio所在这台机上 `ollama serve` 在跑、端口11434;{type(e).__name__}", "models": []}
 
     @app.post("/api/run")
     def run(payload: dict = Body(...)):
