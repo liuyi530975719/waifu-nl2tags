@@ -30,6 +30,24 @@ def _pool_count(workdir):
     except Exception:
         return 0
 
+def _find_waifu_db(workdir):
+    """Best-effort locate waifumaster.db so the 挖卡 step can default to it."""
+    env = os.getenv("NL2TAGS_WAIFU_DB") or os.getenv("WAIFUMASTER_DB")
+    if env and Path(env).exists():
+        return env
+    w = Path(workdir)
+    names = [Path("waifumaster") / "waifumaster" / "waifumaster.db",
+             Path("waifumaster") / "waifumaster.db", Path("waifumaster.db")]
+    for base in [w, w.parent, w.parent.parent]:
+        for nm in names:
+            c = base / nm
+            try:
+                if c.exists():
+                    return str(c)
+            except Exception:
+                pass
+    return ""
+
 def _curate_worker(items, workdir, grok_key, lang, grok_model=None):
     from . import collect_civitai as CC
     pool = Path(workdir) / "data" / "pool.jsonl"
@@ -156,6 +174,13 @@ def _cmd(step, p, workdir):
         return py + ["nl2tags.synth_data", "--n", str(int(p.get("n", 20000))),
                      "--lang", p.get("lang", "mix"), "--out", "data/synth.jsonl"]
     if step == "cards":
+        db = (p.get("db") or "").strip()
+        if db:
+            c = py + ["nl2tags.caption_cards", "--db", db,
+                      "--out", "data/cards.jsonl", "--strip-quality"]
+            if p.get("lang"):
+                c += ["--lang", p["lang"]]
+            return c
         if not p.get("cards"):
             return None
         return py + ["nl2tags.caption_cards", "--cards", p["cards"],
@@ -239,7 +264,8 @@ def build_studio_app(workdir):
         with _LOCK:
             job = {"step": _JOB["step"], "running": _JOB["running"], "returncode": _JOB["returncode"],
                    "log": _JOB["log"][-500:], "elapsed": int(time.time() - _JOB["started"]) if _JOB["started"] else 0}
-        return {"job": job, "artifacts": _artifacts(workdir), "gpu": _gpu(), "workdir": workdir}
+        return {"job": job, "artifacts": _artifacts(workdir), "gpu": _gpu(),
+                "workdir": workdir, "waifu_db": _find_waifu_db(workdir)}
 
     @app.post("/api/curate/fetch")
     def curate_fetch(payload: dict = Body(...)):
@@ -347,6 +373,38 @@ def build_studio_app(workdir):
         with _CLOCK:
             _TEACHER["stop"] = True
         return {"ok": True}
+
+    @app.post("/api/teacher/models")
+    def teacher_models(payload: dict = Body(...)):
+        """List models from the chosen teacher endpoint so the UI can offer a dropdown."""
+        from . import keys as K
+        import urllib.request, json as _j
+        p = payload or {}
+        endpoint = p.get("endpoint", "grok")
+        if endpoint == "grok":
+            k = K.resolve(workdir)
+            if not k["grok"]:
+                return {"ok": False, "error": "先在密钥面板填 Grok key", "models": []}
+            base_url, api_key = "https://api.x.ai/v1", k["grok"]
+        elif endpoint == "local":
+            base_url = (p.get("base_url") or "http://localhost:11434/v1").strip()
+            api_key = "ollama"
+        elif endpoint == "custom":
+            base_url = (p.get("base_url") or "").strip()
+            api_key = (p.get("api_key") or "").strip()
+            if not base_url:
+                return {"ok": False, "error": "custom 需要 base_url", "models": []}
+        else:
+            return {"ok": True, "models": []}   # template: no LLM
+        try:
+            req = urllib.request.Request(base_url.rstrip("/") + "/models",
+                                         headers={"Authorization": "Bearer " + (api_key or "x")})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = _j.loads(r.read())
+            models = sorted(m.get("id") for m in data.get("data", []) if m.get("id"))
+            return {"ok": True, "models": models}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:200], "models": []}
 
     @app.post("/api/run")
     def run(payload: dict = Body(...)):

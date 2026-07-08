@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 import argparse, json, os, random, re
 from pathlib import Path
+from .illustrious import detect_rating
 
 ONT = Path(__file__).resolve().parent / "data" / "tag_ontology.json"
 QUALITY_WORDS = {"masterpiece", "best quality", "amazing quality", "high quality",
@@ -100,9 +101,36 @@ def tags_to_nl(tags, rev, lang, rng):
     body = joiner.join(phrases)
     return (rng.choice(ZH_T) if lang == "zh" else rng.choice(EN_T)).format(s=body)
 
+def iter_db_prompts(db_path, limit=0):
+    """Yield (src_id, prompt_text) from characters.auto_prompt in waifumaster.db.
+
+    Opened read-only so it coexists with the live game (SQLite allows concurrent
+    readers). NOTE: reading the DB over a network mount can throw 'malformed' due
+    to a torn read — on the real machine (local disk) it reads fine.
+    """
+    import sqlite3
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30)
+        con.execute("PRAGMA busy_timeout=30000")
+    except Exception as e:
+        raise SystemExit(f"[cards] cannot open DB {db_path}: {e}")
+    q = ("SELECT id, auto_prompt FROM characters "
+         "WHERE auto_prompt IS NOT NULL AND length(trim(auto_prompt)) > 0")
+    if limit:
+        q += f" LIMIT {int(limit)}"
+    try:
+        cur = con.execute(q)
+    except Exception as e:
+        con.close()
+        raise SystemExit(f"[cards] query failed (need characters.auto_prompt): {e}")
+    for cid, ap_ in cur:
+        yield str(cid), ap_
+    con.close()
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cards", required=True, help="directory of PNG cards")
+    ap.add_argument("--cards", help="directory of PNG cards (mine embedded prompt metadata)")
+    ap.add_argument("--db", help="waifumaster.db — mine characters.auto_prompt (recommended; images are metadata-scrubbed)")
     ap.add_argument("--out", default="data/cards.jsonl")
     ap.add_argument("--nl", choices=["synth", "llm", "vlm"], default="synth")
     ap.add_argument("--lang", choices=["zh", "en", "mix"], default="mix")
@@ -110,33 +138,43 @@ def main(argv=None):
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args(argv)
+    if not a.db and not a.cards:
+        raise SystemExit("need --db PATH (recommended) or --cards DIR")
     rng = random.Random(a.seed)
     rev = build_revmap()
-    files = sorted(Path(a.cards).rglob("*.png"))
-    if a.limit:
-        files = files[: a.limit]
+
+    def sources():
+        if a.db:
+            yield from iter_db_prompts(a.db, a.limit)
+        else:
+            files = sorted(Path(a.cards).rglob("*.png"))
+            if a.limit:
+                files = files[: a.limit]
+            for p in files:
+                yield p.name, read_png_meta(p)
+
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    n = 0
+    n = scanned = 0
     with open(a.out, "w", encoding="utf-8") as f:
-        for p in files:
-            pos = read_png_meta(p)
+        for src, pos in sources():
+            scanned += 1
             if not pos:
                 continue
+            rating = detect_rating(prompt_to_tags(pos, False))  # detect before stripping rating words
             tags = prompt_to_tags(pos, a.strip_quality)
             if len(tags) < 3:
                 continue
             lang = a.lang if a.lang != "mix" else rng.choice(["zh", "zh", "en"])
-            if a.nl == "synth":
-                nl = tags_to_nl(tags, rev, lang, rng)
-            elif a.nl == "llm":
+            if a.nl == "llm":
                 from .synth_data import paraphrase
                 nl = paraphrase(tags_to_nl(tags, rev, lang, rng), lang)
-            else:  # vlm — caption the real image (needs VLM_* env; see README)
-                nl = tags_to_nl(tags, rev, lang, rng)  # fallback if no endpoint
+            else:  # synth (default) / vlm-fallback
+                nl = tags_to_nl(tags, rev, lang, rng)
             f.write(json.dumps({"lang": lang, "nl": nl, "tags": tags,
-                                "rating": "general", "src": p.name}, ensure_ascii=False) + "\n")
+                                "rating": rating, "src": src}, ensure_ascii=False) + "\n")
             n += 1
-    print(f"mined {n} pairs from {len(files)} PNGs -> {a.out}")
+    where = f"DB {a.db}" if a.db else f"{scanned} PNGs"
+    print(f"mined {n} pairs from {where} (scanned {scanned}) -> {a.out}")
 
 if __name__ == "__main__":
     main()

@@ -76,7 +76,8 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
         <option value="grok">Grok(用上面的 key)</option>
         <option value="local">本地 Ollama(免费)</option>
         <option value="template">离线模板(不调模型)</option></select></label>
-      <input class="path" type="text" id="tc-model" placeholder="模型名:Grok 默认 grok-2-1212;本地填如 qwen2.5:32b" style="min-width:220px">
+      <input class="path" type="text" id="tc-model" list="tc-modellist" placeholder="模型名(点「拉取模型」选,或手输)" style="min-width:200px"><datalist id="tc-modellist"></datalist>
+      <button class="btn ghost" id="tc-fetchmodels">拉取模型</button>
       <label>条数 <input type="number" id="tc-n" value="200" min="10" step="50" style="width:90px"></label>
       <label>语言 <select id="tc-lang"><option value="mix">中英混</option><option value="zh">中文</option><option value="en">英文</option></select></label>
       <label>尺度 <select id="tc-nsfw"><option value="all">全(含 explicit)</option><option value="mild">到 sensitive</option><option value="none">只 safe</option></select></label>
@@ -86,9 +87,12 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
       <button class="btn ghost" id="pool-reset">清空池子</button></div>
     <div class="hint" id="tc-hint">选老师 → 点「生成」。本地 Ollama / 离线模板都免费。</div></section>
 
-  <section class="step"><div class="hd"><span class="num">3</span><h2>挖卡 · 可选</h2><span class="pill" id="p-cards">可选</span></div>
-    <p class="desc">从你自己的卡片 PNG 挖内嵌 tag + 合成自然语言,最贴合你的画风。</p>
-    <div class="ctl"><input class="path" type="text" id="cards-path" placeholder="E:\\你的卡片文件夹（含带元数据的 PNG）"><button class="btn" data-step="cards">挖卡</button></div></section>
+  <section class="step"><div class="hd"><span class="num">3</span><h2>挖卡 · 从 DB 挖真实 tag</h2><span class="pill" id="p-cards">可选</span></div>
+    <p class="desc">直读 waifumaster.db 的 <code>characters.auto_prompt</code>(每张卡的真实 Danbooru tag)→ 配自然语言,最贴你游戏分布。<span class="warn">R2 卡图元数据已被抹掉,所以走 DB 而非图</span>。路径自动探测,可改。</p>
+    <div class="ctl"><input class="path" type="text" id="cards-db" placeholder="waifumaster.db 路径(自动探测,可手改)">
+      <label>语言 <select id="cards-lang"><option value="mix">中英混</option><option value="zh">中文</option><option value="en">英文</option></select></label>
+      <button class="btn" data-step="cards">挖卡</button></div>
+    <p class="hint" id="cards-hint">读 DB 是只读,和正在跑的游戏并存没问题。</p></section>
 
   <section class="step"><div class="hd"><span class="num">4</span><h2>建数据集</h2><span class="pill" id="p-dataset">待办</span></div>
     <p class="desc">把合成 + 池子 + 挖卡的数据合并去重,切 train / val。</p>
@@ -118,7 +122,7 @@ const logEl=$('#log');
 logEl.addEventListener('scroll',()=>{atBottom=logEl.scrollTop+logEl.clientHeight>=logEl.scrollHeight-8;});
 function params(step){
   if(step==='gen')return{n:+$('#gen-n').value,lang:$('#gen-lang').value};
-  if(step==='cards')return{cards:$('#cards-path').value.trim()};
+  if(step==='cards')return{db:$('#cards-db').value.trim(),lang:$('#cards-lang').value};
   if(step==='train')return{preset:$('#train-preset').value,epochs:+$('#train-epochs').value,multi_gpu:$('#train-mgpu').checked};
   if(step==='infer')return{text:$('#infer-text').value};
   return{};
@@ -151,6 +155,16 @@ $('#tc-gen').onclick=async()=>{
   teaching=true;$('#tc-stop').style.display='';pollTeacher();
 };
 $('#tc-stop').onclick=async()=>{await fetch('/api/teacher/stop',{method:'POST'});$('#tc-hint').textContent='停止中…';};
+$('#tc-fetchmodels').onclick=async()=>{
+  const btn=$('#tc-fetchmodels'),old=btn.textContent;btn.disabled=true;btn.textContent='拉取中…';
+  let r;try{r=await fetch('/api/teacher/models',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:$('#tc-endpoint').value})}).then(x=>x.json());}catch(e){r={ok:false,error:e.message};}
+  btn.disabled=false;btn.textContent=old;
+  const dl=$('#tc-modellist');dl.innerHTML='';
+  if(r.ok&&r.models&&r.models.length){r.models.forEach(m=>{const o=document.createElement('option');o.value=m;dl.appendChild(o);});
+    if(!$('#tc-model').value)$('#tc-model').value=r.models[0];
+    $('#tc-hint').textContent='拉到 '+r.models.length+' 个模型 —— 点模型框看下拉,或直接手输。';}
+  else{$('#tc-hint').textContent='拉取失败:'+(r.error||'无模型')+' —— 可手输模型名。';}
+};
 $('#pool-reset').onclick=async()=>{if(!confirm('清空池子?(会把现有 pool.jsonl 归档)'))return;await fetch('/api/curate/reset',{method:'POST'});pollTeacher();};
 async function pollTeacher(){
   let c;try{c=await fetch('/api/teacher/state').then(r=>r.json());}catch(e){return;}
@@ -172,6 +186,7 @@ async function poll(){
   let d;try{d=await fetch('/api/state').then(r=>r.json());}catch(e){$('#meta').textContent='连接断开,确认服务还在跑';return;}
   const gpu=(d.gpu&&d.gpu.length)?('<span class="gpu">GPU: '+d.gpu.join(' | ')+'</span>'):'未检测到 CUDA GPU';
   $('#meta').innerHTML='工作目录: '+d.workdir+' &nbsp;·&nbsp; '+gpu;
+  if(d.waifu_db && $('#cards-db') && !$('#cards-db').value){$('#cards-db').value=d.waifu_db;}
   const job=d.job||{};running=!!job.running;
   STEPS.forEach(s=>{const pill=document.getElementById(PILL[s]);if(!pill)return;
     if(running&&job.step===s){pill.className='pill run';pill.textContent='运行中'+(job.elapsed?' · '+fmtE(job.elapsed):'');}
