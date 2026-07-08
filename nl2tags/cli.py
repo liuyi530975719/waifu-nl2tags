@@ -85,3 +85,7 @@ def main(argv=None):
         print(f"unknown command: {cmd}\n"); print(HELP); return
     mod = importlib.import_module(f"nl2tags.{SUB[cmd]}")
     return mod.main(rest)
+
+
+if __name__ == "__main__":
+    main()
