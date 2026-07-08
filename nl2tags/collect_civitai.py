@@ -20,6 +20,19 @@ CIVITAI = "https://civitai.com/api/v1/images"
 GROK_URL = os.getenv("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/") + "/chat/completions"
 GROK_MODEL = os.getenv("GROK_VISION_MODEL", "grok-2-vision-latest")
 
+def _parse_model_id(s):
+    """Accept a full Civitai model URL, or a bare id, and return the numeric modelId."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    m = re.search(r"/models/(\d+)", s)      # https://civitai.com/models/12345/name[?...]
+    if m:
+        return m.group(1)
+    if s.isdigit():
+        return s
+    m = re.search(r"(\d{2,})", s)            # fallback: first long number
+    return m.group(1) if m else None
+
 def _civitai_page(params, key):
     url = CIVITAI + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "nl2tags"})
@@ -120,7 +133,7 @@ def evaluate(item, grok, lang, min_overlap):
 
 def preview(n, model_id, nsfw, scope, civitai_key, grok_key, lang="mix", min_overlap=0.15):
     """Fetch + caption n images, return per-item assessments. Writes nothing."""
-    src = model_id if (scope in ("model", "both") and model_id) else None
+    src = _parse_model_id(model_id) if (scope in ("model", "both") and model_id) else None
     out = []
     for item in fetch_images(civitai_key, n, nsfw, model_id=src):
         try:
@@ -137,9 +150,10 @@ def fetch_batch(key, n, nsfw, model_id=None):
     """Fetch a varied batch of images (with usable prompts) for human curation.
     No Grok here — captioning happens only on the ones the user selects."""
     import random as _r
-    period = _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
+    mid = _parse_model_id(model_id)
+    period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
     out = []
-    for it in fetch_images(key, n * 3, nsfw, model_id=(model_id or None),
+    for it in fetch_images(key, n * 3, nsfw, model_id=mid,
                            sort="Most Reactions", period=period):
         tags = prompt_to_tags(it["prompt"], strip_quality=True)
         if len(tags) >= 4:
@@ -169,7 +183,7 @@ def main(argv=None):
 
     sources = []
     if a.scope in ("model", "both") and a.model_id:
-        sources.append(a.model_id)
+        sources.append(_parse_model_id(a.model_id))
     if a.scope in ("general", "both") or not a.model_id:
         sources.append(None)
 

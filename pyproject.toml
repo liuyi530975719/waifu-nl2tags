@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "waifu-nl2tags"
-version = "0.6.6"
+version = "0.6.7"
 description = "Bilingual (中/EN) natural-language -> Illustrious/NoobAI Danbooru-tag translator"
 readme = "README.md"
 requires-python = ">=3.9"
