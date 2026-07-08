@@ -25,7 +25,7 @@ examples:
   nl2tags infer --adapter out/adapter "银发猫娘女仆，红眼睛，室内"
 """
 
-SUB = {"studio": "studio", "gen": "synth_data", "cards": "caption_cards", "dataset": "make_dataset",
+SUB = {"studio": "studio", "gen": "synth_data", "civitai": "collect_civitai", "cards": "caption_cards", "dataset": "make_dataset",
        "train": "train_qlora", "infer": "infer", "baseline": "baseline", "serve": "serve"}
 
 def doctor():
