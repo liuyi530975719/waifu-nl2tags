@@ -41,11 +41,15 @@ def _civitai_page(params, key):
     with urllib.request.urlopen(req, timeout=40) as r:
         return json.loads(r.read())
 
-def fetch_images(key, limit, nsfw, model_id=None, sort="Most Reactions", period="AllTime"):
+def fetch_images(key, limit, nsfw, model_id=None, sort=None, period=None):
     """Yield {url, prompt, nsfw} for up to `limit` images that have a prompt."""
     got, cursor = 0, None
     while got < limit:
-        params = {"limit": min(100, limit - got), "sort": sort, "period": period, "nsfw": nsfw}
+        params = {"limit": min(100, limit - got), "nsfw": nsfw}
+        if sort:
+            params["sort"] = sort
+        if period:
+            params["period"] = period
         if model_id:
             params["modelId"] = model_id            # note: don't also send modelVersionId (sort bug)
         if cursor:
@@ -192,15 +196,17 @@ def fetch_batch(key, n, nsfw, model_id=None):
     import random as _r
     mid = _parse_model_id(model_id)
     period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
-    out = []
-    for it in fetch_images(key, n * 3, nsfw, model_id=mid,
-                           sort="Most Reactions", period=period):
-        tags = prompt_to_tags(it["prompt"], strip_quality=True)
-        if len(tags) >= 4:
-            out.append({"url": it["url"], "prompt": it["prompt"],
-                        "nsfw": it["nsfw"], "tags_preview": tags[:12]})
-        if len(out) >= n:
-            break
+    for opts in ({"sort": "Most Reactions", "period": period}, {}):   # best-effort, then bare fallback
+        out = []
+        for it in fetch_images(key, n * 3, nsfw, model_id=mid, **opts):
+            tags = prompt_to_tags(it["prompt"], strip_quality=True)
+            if len(tags) >= 4:
+                out.append({"url": it["url"], "prompt": it["prompt"],
+                            "nsfw": it["nsfw"], "tags_preview": tags[:12]})
+            if len(out) >= n:
+                break
+        if out:
+            return out
     return out
 
 def main(argv=None):

@@ -58,20 +58,24 @@ def _fetch_worker(key, n, nsfw, model_id):
     mid = CC._parse_model_id(model_id)
     period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
     out, scanned = [], 0
-    try:
-        for it in CC.fetch_images(key, n * 4, nsfw, model_id=mid, sort="Most Reactions", period=period):
-            scanned += 1
-            tags = CC.prompt_to_tags(it["prompt"], strip_quality=True)
-            if len(tags) >= 4:
-                out.append({"url": it["url"], "prompt": it["prompt"],
-                            "nsfw": it["nsfw"], "tags_preview": tags[:12]})
+    for opts in ({"sort": "Most Reactions", "period": period}, {}):   # best, then bare fallback
+        out, scanned = [], 0
+        try:
+            for it in CC.fetch_images(key, n * 4, nsfw, model_id=mid, **opts):
+                scanned += 1
+                tags = CC.prompt_to_tags(it["prompt"], strip_quality=True)
+                if len(tags) >= 4:
+                    out.append({"url": it["url"], "prompt": it["prompt"],
+                                "nsfw": it["nsfw"], "tags_preview": tags[:12]})
+                with _CLOCK:
+                    _FETCH["found"] = len(out); _FETCH["scanned"] = scanned
+                if len(out) >= n:
+                    break
+        except Exception as e:
             with _CLOCK:
-                _FETCH["found"] = len(out); _FETCH["scanned"] = scanned
-            if len(out) >= n:
-                break
-    except Exception as e:
-        with _CLOCK:
-            _FETCH["err"] = str(e)
+                _FETCH["err"] = str(e)
+        if out:
+            break
     diag = {}
     if not out:
         try:
