@@ -17,7 +17,7 @@ _JOB = {"proc": None, "step": None, "log": [], "running": False, "returncode": N
 _LOCK = threading.Lock()
 _GPU = None
 _CURATE = {"adding": False, "done": 0, "total": 0, "added": 0}
-_FETCH = {"fetching": False, "found": 0, "scanned": 0, "items": [], "err": ""}
+_FETCH = {"fetching": False, "found": 0, "scanned": 0, "items": [], "err": "", "diag": {}}
 _CLOCK = threading.Lock()
 
 def _pool_count(workdir):
@@ -72,8 +72,14 @@ def _fetch_worker(key, n, nsfw, model_id):
     except Exception as e:
         with _CLOCK:
             _FETCH["err"] = str(e)
+    diag = {}
+    if not out:
+        try:
+            diag = CC.probe(key, nsfw, model_id)
+        except Exception as e:
+            diag = {"err": f"probe failed: {e}"}
     with _CLOCK:
-        _FETCH["items"] = out; _FETCH["fetching"] = False
+        _FETCH["items"] = out; _FETCH["diag"] = diag; _FETCH["fetching"] = False
 
 def _gpu():
     global _GPU
@@ -236,7 +242,7 @@ def build_studio_app(workdir):
             f = {"fetching": _FETCH["fetching"], "found": _FETCH["found"],
                  "scanned": _FETCH["scanned"], "err": _FETCH["err"]}
             if not _FETCH["fetching"]:
-                f["items"] = _FETCH["items"]
+                f["items"] = _FETCH["items"]; f["diag"] = _FETCH["diag"]
         c["pool"] = _pool_count(workdir)
         c["target"] = int(os.getenv("NL2TAGS_ROUND", "200"))
         c["fetch"] = f

@@ -12,7 +12,7 @@ never passed on the command line or printed.
   python -m nl2tags.collect_civitai --limit 200 --nsfw X --scope both --out data/civitai.jsonl
 """
 from __future__ import annotations
-import argparse, json, os, random, re, sys, time, urllib.request, urllib.parse
+import argparse, json, os, random, re, sys, time, urllib.request, urllib.parse, urllib.error
 from pathlib import Path
 from .caption_cards import prompt_to_tags
 
@@ -145,6 +145,46 @@ def preview(n, model_id, nsfw, scope, civitai_key, grok_key, lang="mix", min_ove
             break
     return out
 
+
+def probe(key, nsfw, model_id=None, sort="Most Reactions", period="AllTime", limit=20):
+    """One raw Civitai call for diagnosing empty results. Never raises."""
+    mid = _parse_model_id(model_id)
+    params = {"limit": limit, "sort": sort, "period": period, "nsfw": nsfw}
+    if mid:
+        params["modelId"] = mid
+    info = {"url": CIVITAI + "?" + urllib.parse.urlencode(params), "modelId": mid,
+            "status": None, "raw": 0, "with_prompt": 0, "err": "", "raw_base": None, "base_err": ""}
+    # baseline: does the API work at all (plain call, no filters)?
+    try:
+        breq = urllib.request.Request(CIVITAI + "?limit=5", headers={"User-Agent": "nl2tags"})
+        if key:
+            breq.add_header("Authorization", "Bearer " + key)
+        with urllib.request.urlopen(breq, timeout=40) as br:
+            info["raw_base"] = len(json.loads(br.read()).get("items", []))
+    except urllib.error.HTTPError as e:
+        info["base_err"] = f"HTTP {e.code}"
+    except Exception as e:
+        info["base_err"] = f"{type(e).__name__}: {e}"
+    try:
+        req = urllib.request.Request(info["url"], headers={"User-Agent": "nl2tags"})
+        if key:
+            req.add_header("Authorization", "Bearer " + key)
+        with urllib.request.urlopen(req, timeout=40) as r:
+            info["status"] = getattr(r, "status", 200)
+            data = json.loads(r.read())
+        items = data.get("items", [])
+        info["raw"] = len(items)
+        info["with_prompt"] = sum(1 for it in items
+                                  if ((it.get("meta") or {}).get("prompt") or "").strip())
+    except urllib.error.HTTPError as e:
+        info["status"] = e.code
+        try:
+            info["err"] = f"HTTP {e.code}: " + e.read()[:200].decode("utf-8", "replace")
+        except Exception:
+            info["err"] = f"HTTP {e.code}"
+    except Exception as e:
+        info["err"] = f"{type(e).__name__}: {e}"
+    return info
 
 def fetch_batch(key, n, nsfw, model_id=None):
     """Fetch a varied batch of images (with usable prompts) for human curation.

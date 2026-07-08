@@ -173,7 +173,7 @@ async function pollCurate(){
   if(F.fetching){$('#cv-fetch').disabled=true;$('#cv-addhint').textContent='抓取中… 已找到 '+(F.found||0)+' 张(扫描 '+(F.scanned||0)+' 张)';}
   else if(fetchWatch){fetchWatch=false;handledFetch=true;$('#cv-fetch').disabled=false;gal=F.items||[];sel=new Set();renderGal();
     if(F.err)$('#cv-addhint').textContent='抓取出错:'+F.err;
-    else if(!gal.length)$('#cv-addhint').textContent='抓到 0 张 —— 该模型的图可能没带 prompt;抓 NSFW 需在密钥面板填 Civitai token;也可清空模型框抓泛图。';
+    else if(!gal.length){const dg=F.diag||{};$('#cv-addhint').textContent='抓到 0 张 —— 本次查询 Civitai 返回 '+(dg.raw||0)+' 张(带prompt '+(dg.with_prompt||0)+')'+(dg.status?(' HTTP'+dg.status):'')+(dg.err?(' '+dg.err):'')+' | 基础探测返回 '+(dg.raw_base==null?'?':dg.raw_base)+' 张'+(dg.base_err?(' '+dg.base_err):'')+'。基础=0→鉴权/地区/网络问题(检查 token、或服务器被 Civitai 区域限制);基础>0 但本次=0→尺度/modelId 问题。';}
     else $('#cv-addhint').textContent='抓到 '+gal.length+' 张,点选想要的再「加入池子」';}
   const busy=c.adding||F.fetching||fetchWatch;
   if(busy){setTimeout(pollCurate,1000);}
