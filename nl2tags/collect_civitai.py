@@ -45,7 +45,9 @@ def fetch_images(key, limit, nsfw, model_id=None, sort=None, period=None):
     """Yield {url, prompt, nsfw} for up to `limit` images that have a prompt."""
     got, cursor = 0, None
     while got < limit:
-        params = {"limit": min(100, limit - got), "nsfw": nsfw}
+        params = {"limit": min(100, limit - got)}
+        if nsfw:
+            params["nsfw"] = nsfw
         if sort:
             params["sort"] = sort
         if period:
@@ -196,9 +198,10 @@ def fetch_batch(key, n, nsfw, model_id=None):
     import random as _r
     mid = _parse_model_id(model_id)
     period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
-    for opts in ({"sort": "Most Reactions", "period": period}, {}):   # best-effort, then bare fallback
+    for nf, opts in ((nsfw, {"sort": "Most Reactions", "period": period}),
+                     (nsfw, {}), (None, {})):   # best -> nsfw-only -> bare (proven ?limit=X)
         out = []
-        for it in fetch_images(key, n * 3, nsfw, model_id=mid, **opts):
+        for it in fetch_images(key, n * 3, nf, model_id=mid, **opts):
             tags = prompt_to_tags(it["prompt"], strip_quality=True)
             if len(tags) >= 4:
                 out.append({"url": it["url"], "prompt": it["prompt"],

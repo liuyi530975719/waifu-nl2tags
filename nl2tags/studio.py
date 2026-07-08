@@ -62,10 +62,11 @@ def _fetch_worker(key, n, nsfw, model_id):
     mid = CC._parse_model_id(model_id)
     period = "AllTime" if mid else _r.choice(["Day", "Week", "Month", "Year", "AllTime"])
     out, scanned = [], 0
-    for opts in ({"sort": "Most Reactions", "period": period}, {}):   # best, then bare fallback
+    for nf, opts in ((nsfw, {"sort": "Most Reactions", "period": period}),
+                     (nsfw, {}), (None, {})):   # best -> nsfw-only -> bare (proven call)
         out, scanned = [], 0
         try:
-            for it in CC.fetch_images(key, n * 4, nsfw, model_id=mid, **opts):
+            for it in CC.fetch_images(key, n * 4, nf, model_id=mid, **opts):
                 scanned += 1
                 tags = CC.prompt_to_tags(it["prompt"], strip_quality=True)
                 if len(tags) >= 4:
