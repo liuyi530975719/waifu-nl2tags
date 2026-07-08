@@ -16,7 +16,7 @@ from .illustrious import default_formatter  # noqa: F401 (ensures package import
 _JOB = {"proc": None, "step": None, "log": [], "running": False, "returncode": None, "started": 0.0}
 _LOCK = threading.Lock()
 _GPU = None
-_CURATE = {"adding": False, "done": 0, "total": 0, "added": 0}
+_CURATE = {"adding": False, "done": 0, "total": 0, "added": 0, "err": ""}
 _FETCH = {"fetching": False, "found": 0, "scanned": 0, "items": [], "err": "", "diag": {}}
 _CLOCK = threading.Lock()
 
@@ -29,17 +29,20 @@ def _pool_count(workdir):
     except Exception:
         return 0
 
-def _curate_worker(items, workdir, grok_key, lang):
+def _curate_worker(items, workdir, grok_key, lang, grok_model=None):
     from . import collect_civitai as CC
     pool = Path(workdir) / "data" / "pool.jsonl"
     pool.parent.mkdir(parents=True, exist_ok=True)
     added = 0
+    first_err = ""
     with open(pool, "a", encoding="utf-8") as f:
         for it in items:
             try:
-                g = CC.grok_caption(it["url"], grok_key)
-            except Exception:
+                g = CC.grok_caption(it["url"], grok_key, grok_model)
+            except Exception as e:
                 g = None
+                if not first_err:
+                    first_err = f"{type(e).__name__}: {e}"
             ev = CC.evaluate({"url": it["url"], "prompt": it.get("prompt", ""),
                               "nsfw": it.get("nsfw", "")}, g, lang, 0.0)   # human already judged -> no overlap gate
             if g and len(ev["target"]) >= 4 and ev["nl"]:
@@ -51,6 +54,7 @@ def _curate_worker(items, workdir, grok_key, lang):
     with _CLOCK:
         _CURATE["adding"] = False
         _CURATE["added"] = added
+        _CURATE["err"] = first_err
 
 def _fetch_worker(key, n, nsfw, model_id):
     from . import collect_civitai as CC
@@ -235,7 +239,8 @@ def build_studio_app(workdir):
         with _CLOCK:
             _CURATE.update(adding=True, done=0, total=len(items), added=0)
         threading.Thread(target=_curate_worker,
-                         args=(items, workdir, k["grok"], (payload or {}).get("lang", "mix")),
+                         args=(items, workdir, k["grok"], (payload or {}).get("lang", "mix"),
+                               k.get("grok_model")),
                          daemon=True).start()
         return {"ok": True, "total": len(items)}
 
@@ -300,6 +305,7 @@ def build_studio_app(workdir):
         from . import keys as K
         p = payload or {}
         return K.set_keys(civitai=p.get("civitai"), grok=p.get("grok"),
+                          grok_model=p.get("grok_model"),
                           workdir=workdir, save=bool(p.get("save")))
 
     @app.post("/api/stop")

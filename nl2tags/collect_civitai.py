@@ -18,7 +18,7 @@ from .caption_cards import prompt_to_tags
 
 CIVITAI = "https://civitai.com/api/v1/images"
 GROK_URL = os.getenv("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/") + "/chat/completions"
-GROK_MODEL = os.getenv("GROK_VISION_MODEL", "grok-2-vision-latest")
+GROK_MODEL = os.getenv("GROK_VISION_MODEL", "grok-2-vision-1212")
 
 def _parse_model_id(s):
     """Accept a full Civitai model URL, or a bare id, and return the numeric modelId."""
@@ -74,7 +74,7 @@ def fetch_images(key, limit, nsfw, model_id=None, sort=None, period=None):
         if not cursor:
             break
 
-def grok_caption(image_url, key):
+def grok_caption(image_url, key, model=None):
     """Return dict {nl_zh, nl_en, tags:[...]} or None."""
     sys_p = ("You look at ONE anime image and output STRICT JSON only:\n"
              '{"nl_zh":"...","nl_en":"...","tags":["...", "..."]}\n'
@@ -82,7 +82,7 @@ def grok_caption(image_url, key):
              "image (Chinese / English), 1-2 sentences, no tag lists.\n"
              "tags = up to 14 booru-style tags for what you actually see. JSON only, no prose.")
     body = json.dumps({
-        "model": GROK_MODEL, "temperature": 0.5, "max_tokens": 500,
+        "model": model or GROK_MODEL, "temperature": 0.5, "max_tokens": 500,
         "messages": [
             {"role": "system", "content": sys_p},
             {"role": "user", "content": [

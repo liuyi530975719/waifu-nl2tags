@@ -9,7 +9,7 @@ from __future__ import annotations
 import json, os, sqlite3
 from pathlib import Path
 
-_MEM = {"civitai": "", "grok": ""}
+_MEM = {"civitai": "", "grok": "", "grok_model": ""}
 
 def _from_chat_db(db_path):
     try:
@@ -35,13 +35,16 @@ def resolve(workdir="."):
         dbp = os.getenv("NL2TAGS_CHAT_DB", "").strip()
         if dbp and Path(dbp).exists():
             gr = _from_chat_db(dbp)
-    return {"civitai": ci, "grok": gr}
+    gm = _MEM["grok_model"] or os.getenv("GROK_VISION_MODEL", "").strip() or "grok-2-vision-1212"
+    return {"civitai": ci, "grok": gr, "grok_model": gm}
 
-def set_keys(civitai=None, grok=None, workdir=".", save=False):
+def set_keys(civitai=None, grok=None, grok_model=None, workdir=".", save=False):
     if civitai is not None:
         _MEM["civitai"] = civitai.strip()
     if grok is not None:
         _MEM["grok"] = grok.strip()
+    if grok_model is not None:
+        _MEM["grok_model"] = grok_model.strip()
     if save:
         k = resolve(workdir)
         (Path(workdir) / "keys.local.json").write_text(
@@ -53,4 +56,5 @@ def status(workdir="."):
     src = "env" if os.getenv("CIVITAI_API_KEY") or os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY") else \
           ("ui" if (_MEM["civitai"] or _MEM["grok"]) else
            ("file" if (Path(workdir) / "keys.local.json").exists() else "none"))
-    return {"civitai": bool(k["civitai"]), "grok": bool(k["grok"]), "source": src}
+    return {"civitai": bool(k["civitai"]), "grok": bool(k["grok"]),
+            "grok_model": k["grok_model"], "source": src}

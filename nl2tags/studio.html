@@ -59,6 +59,7 @@ pre{margin:0;background:#0c0d12;border:1px solid var(--bd);border-radius:9px;pad
     <p class="desc">Civitai 抓图 + Grok 视觉描述用。<span class="warn">密钥只存本机,绝不进仓库</span>。勾「记住」写到本机 <code>keys.local.json</code>(已 gitignore)。</p>
     <div class="kr"><label><span class="dot" id="d-civitai"></span>Civitai</label><input type="password" id="k-civitai" class="path" placeholder="Civitai API token(抓 NSFW 需要)"></div>
     <div class="kr"><label><span class="dot" id="d-grok"></span>Grok</label><input type="password" id="k-grok" class="path" placeholder="xAI / Grok API key"></div>
+    <div class="kr"><label>视觉模型</label><input type="text" id="k-gmodel" class="path" placeholder="grok-2-vision-1212(看图用;不确定就留默认)"></div>
     <div class="ctl"><label><input type="checkbox" id="k-save"> 记住(存本机)</label><button class="btn" id="save-keys">保存</button><span class="hint" id="k-src"></span></div>
   </section>
 
@@ -131,9 +132,10 @@ async function loadKeys(){
   $('#d-civitai').className='dot'+(k.civitai?' on':''); $('#d-grok').className='dot'+(k.grok?' on':'');
   const p=$('#p-keys'),ok=k.civitai&&k.grok; p.className='pill'+(ok?' done':(k.grok?' run':'')); p.textContent=ok?'已配置 ✓':(k.grok?'仅 Grok':'未配置');
   $('#k-src').textContent=k.source&&k.source!=='none'?('来源: '+k.source):'';
+  if(k.grok_model && !$('#k-gmodel').value) $('#k-gmodel').placeholder='当前: '+k.grok_model;
 }
 $('#save-keys').onclick=async()=>{
-  await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({civitai:$('#k-civitai').value.trim(),grok:$('#k-grok').value.trim(),save:$('#k-save').checked})});
+  await fetch('/api/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({civitai:$('#k-civitai').value.trim(),grok:$('#k-grok').value.trim(),grok_model:$('#k-gmodel').value.trim(),save:$('#k-save').checked})});
   $('#k-civitai').value='';$('#k-grok').value='';loadKeys();
 };
 // curation gallery
@@ -177,7 +179,7 @@ async function pollCurate(){
     else $('#cv-addhint').textContent='抓到 '+gal.length+' 张,点选想要的再「加入池子」';}
   const busy=c.adding||F.fetching||fetchWatch;
   if(busy){setTimeout(pollCurate,1000);}
-  else if(c.total&&!handledFetch){$('#cv-addhint').textContent='已加入 '+c.added+'/'+c.total+'(无有效 prompt 的被跳过)';}
+  else if(c.total&&!handledFetch){$('#cv-addhint').textContent='已加入 '+c.added+'/'+c.total+(c.err?(' · Grok 报错:'+c.err+'(去密钥面板换视觉模型名)'):'(其余无有效 prompt 被跳过)');}
 }
 // main job poll
 function fmtE(s){const m=Math.floor(s/60),ss=s%60;return m?`${m}分${ss}秒`:`${ss}秒`;}
